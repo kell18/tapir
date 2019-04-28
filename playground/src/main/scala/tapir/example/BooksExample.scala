@@ -1,15 +1,66 @@
 package tapir.example
 
 import java.util.Properties
-
 import com.typesafe.scalalogging.StrictLogging
 import tapir.example.Endpoints.Limit
+import tapir.internal.server.{DecodeInputs, DecodeInputsContext, DecodeInputsResult}
+import tapir.Endpoint
 
 case class Country(name: String)
 case class Author(name: String, country: Country)
 case class Genre(name: String, description: String)
 case class Book(title: String, genre: Genre, year: Int, author: Author)
 case class BooksQuery(genre: Option[String], limit: Limit)
+
+
+object GraphQLResource {
+  import sangria.schema.ObjectType
+  import sangria.schema.Schema
+  import sangria.schema.fields
+  import sangria.schema.Field
+  import sangria.schema.OutputType
+  import sangria.schema.{StringType, IntType, ObjectType}
+
+  // ..
+
+  // ..
+  // a. Grasp the general docs: https://sangria-graphql.org/learn/
+  // b. Try to make an abstraction around it using Tapir:
+  //    - Make some examples (simple, comples, edge cases)
+  //    - Start small by providing simplest transformation from particular example on Tapir to GraphQU backend
+
+
+  class ToGQL[I, E, O, S[_]](options: Nothing) {
+    def apply(e: Endpoint[I, E, O, S]): ObjectType[DecodeInputsContext, I] = {
+
+      def decodeBody(result: DecodeInputsResult): ObjectType[DecodeInputsContext, DecodeInputsResult] = {
+        ??? // Most interesting part
+      }
+
+      val context: DecodeInputsContext = ??? // .. Own wrapper?
+      val decodedInput: DecodeInputsResult = DecodeInputs(e.input, context)
+
+      decodeBody(decodedInput) // .. set types right or at least cast type to I
+      ???
+    }
+  }
+
+
+  val name = "gql res"
+  val descr = "blah blah blah"
+
+  type F1type = String
+  val f1name = ""
+  val f1type: OutputType[String] = "f1TapirParams" match {
+    case _ => StringType
+  }
+
+  val o = ObjectType(name, descr,
+    fields[Unit, F1type](
+      Field(f1name, f1type, resolve = _.value)
+    )
+  )
+}
 
 /**
   * Descriptions of endpoints used in the example.
@@ -43,8 +94,9 @@ object Endpoints {
     .in(limitParameter)
     .out(jsonBody[Vector[Book]])
 
+  val a = ("list" / path[String]("genre").map(Some(_))(_.get)).and(limitParameter).mapTo(BooksQuery)
   val booksListingByGenre: Endpoint[BooksQuery, String, Vector[Book], Nothing] = baseEndpoint.get
-    .in(("list" / path[String]("genre").map(Some(_))(_.get)).and(limitParameter).mapTo(BooksQuery))
+    .in(a)
     .out(jsonBody[Vector[Book]])
 }
 

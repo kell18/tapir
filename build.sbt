@@ -175,7 +175,9 @@ lazy val playground: Project = (project in file("playground"))
     name := "tapir-tests",
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp" %% "akka-http-backend" % sttpVersion,
-      "org.webjars" % "swagger-ui" % "3.22.0"
+      "org.webjars" % "swagger-ui" % "3.22.0",
+      "org.sangria-graphql" %% "sangria" % "1.4.2",
+      "org.sangria-graphql" %% "sangria-circe" % "1.2.1"
     ),
     libraryDependencies ++= loggerDependencies,
     publishArtifact := false
