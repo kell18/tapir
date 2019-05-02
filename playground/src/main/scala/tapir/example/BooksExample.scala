@@ -4,7 +4,12 @@ import java.util.Properties
 import com.typesafe.scalalogging.StrictLogging
 import tapir.example.Endpoints.Limit
 import tapir.internal.server.{DecodeInputs, DecodeInputsContext, DecodeInputsResult}
-import tapir.Endpoint
+import tapir.{Endpoint, EndpointIO}
+import tapir.{Schema => TSchema}
+import tapir.EndpointIO.Info
+import tapir.Schema.{SObject, SString}
+import scala.concurrent.Future
+import scala.reflect.internal.annotations
 
 case class Country(name: String)
 case class Author(name: String, country: Country)
@@ -21,20 +26,57 @@ object GraphQLResource {
   import sangria.schema.OutputType
   import sangria.schema.{StringType, IntType, ObjectType}
 
-  // ..
 
-  // ..
-  // a. Grasp the general docs: https://sangria-graphql.org/learn/
-  // b. Try to make an abstraction around it using Tapir:
-  //    - Make some examples (simple, comples, edge cases)
-  //    - Start small by providing simplest transformation from particular example on Tapir to GraphQU backend
+  // @annotations.tailrecursive
+  def makeFields(fieldsSchema: TSchema): OutputType[_] = fieldsSchema match {
+    case s@SString => Field(s.show, StringType)
+    case SObject(objInfo, fields, required) => {
+      ObjectType(
+        objInfo.fullName,
+        fields.map { case (fName, fSchema) => Field(fName, makeFields(fSchema)) }
+      )
+    }
+  }
+
+  // @annotations.tailrecursive
+  def makeMutation(fieldsSchema: TSchema): OutputType[_] = fieldsSchema match {
+    case s@SString =>
+    case SObject(objInfo, fields, required) =>
+  }
+
+  def makeObjectType[T, Ctx, Val](tSchema: TSchema, info: Info[T]): ObjectType[Ctx, Val] = {
+    ObjectType(
+      name,
+      info.description,
+      makeFields(tSchema)
+    )
+  }
+
+  case class InvalidEndpoint(reason: String) extends Exception(reason)
 
 
-  class ToGQL[I, E, O, S[_]](options: Nothing) {
-    def apply(e: Endpoint[I, E, O, S]): ObjectType[DecodeInputsContext, I] = {
+  class ToGQL[I, E, O, S[_]](e: Endpoint[I, E, O, S]) {
+    def apply(logic: I => Future[Either[E, O]]): ObjectType[DecodeInputsContext, I] = {
 
-      def decodeBody(result: DecodeInputsResult): ObjectType[DecodeInputsContext, DecodeInputsResult] = {
-        ??? // Most interesting part
+      def decodeBody[Ctx, Val](result: DecodeInputsResult): ObjectType[DecodeInputsContext, DecodeInputsResult] = {
+        result match {
+          case values: DecodeInputsResult.Values =>
+            values.bodyInput match {
+              case Some(bodyInput@EndpointIO.Body(codec, info)) => {
+                val name = e.info.name.getOrElse(throw InvalidEndpoint("Endpoint name is required to generate GraphQL"))
+                // .. keep going: you can do both in and out with GQL (depends on resolvers)
+                // .. think on resolvers
+                // .. test on some examples
+                ObjectType(name, e.info.description, fields[Ctx, Val](
+
+                ))
+                codec.meta.schema
+              }
+            }
+          case failure: DecodeInputsResult.Failure =>
+        }
+
+        ???
       }
 
       val context: DecodeInputsContext = ??? // .. Own wrapper?

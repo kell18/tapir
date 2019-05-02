@@ -62,6 +62,8 @@ private[akkahttp] object OutputToAkkaRoute {
     val vs = ParamsToSeq(v)
     var rv = initialResponseValues
 
+    // .. output format
+    // .. later: fix unsafe seq access? maybe change output or make reasonable exception
     output.asVectorOfSingleOutputs.zipWithIndex.foreach {
       case (EndpointIO.Body(codec, _), i) =>
         codec.encode(vs(i)).map(rawValueToResponseEntity(codec.meta, _)).foreach(re => rv = rv.withBody(re))
