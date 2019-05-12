@@ -8,7 +8,7 @@ import tapir.internal.server.{DecodeInputs, DecodeInputsContext, DecodeInputsRes
 import tapir.{Endpoint, EndpointIO}
 import tapir.{Schema => TSchema}
 import tapir.EndpointIO.Info
-import tapir.Schema.{SObject, SString}
+import tapir.Schema.{SObject, SString, SProduct}
 import scala.concurrent.Future
 import scala.reflect.internal.annotations
 
@@ -32,7 +32,7 @@ object GraphQLResource {
   // @annotations.tailrecursive
   def makeFields(fieldsSchema: TSchema): OutputType[_] = fieldsSchema match {
     case s@SString => Field(s.show, StringType)
-    case SObject(objInfo, fields, required) => {
+    case SProduct(objInfo, fields, required) => {
       ObjectType(
         objInfo.fullName,
         fields.map { case (fName, fSchema) => Field(fName, makeFields(fSchema)) }
@@ -43,7 +43,7 @@ object GraphQLResource {
   // @annotations.tailrecursive
   def makeMutation(fieldsSchema: TSchema): OutputType[_] = fieldsSchema match {
     case s@SString =>
-    case SObject(objInfo, fields, required) =>
+    case SProduct(objInfo, fields, required) =>
   }
 
   def makeObjectType[T, Ctx, Val](tSchema: TSchema, info: Info[T]): ObjectType[Ctx, Val] = {
@@ -90,7 +90,7 @@ object GraphQLResource {
                 // .. find a name for the all fields
                 codec.meta.schema match {
                   case s@SString => Field(s.show, StringType)
-                  case SObject(objInfo, fields, required) => {
+                  case SProduct(objInfo, fields, required) => {
                     ObjectType(
                       objInfo.fullName,
                       fields.map { case (fName, fSchema) =>
