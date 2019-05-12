@@ -27,7 +27,7 @@ trait SchemaForMagnoliaDerivation {
             }
           } else {
             new SchemaFor[T] {
-              override val schema: Schema = SObject(
+              override val schema: Schema = SProduct(
                 typeNameToObjectInfo(ctx.typeName),
                 ctx.parameters.map(p => (genericDerivationConfig.transformMemberName(p.label), p.typeclass.schema)).toList,
                 ctx.parameters.filter(!_.typeclass.isOptional).map(p => genericDerivationConfig.transformMemberName(p.label))
@@ -41,8 +41,10 @@ trait SchemaForMagnoliaDerivation {
     }
   }
 
-  private def typeNameToObjectInfo(typeName: TypeName): Schema.SObjectInfo =
-    SObjectInfo(typeName.full, typeName.typeArguments.map(_.short).toList)
+  private def typeNameToObjectInfo(typeName: TypeName): Schema.SObjectInfo = {
+    def allTypeArguments(tn: TypeName): Seq[TypeName] = tn.typeArguments.flatMap(tn2 => tn2 +: allTypeArguments(tn2))
+    SObjectInfo(typeName.full, allTypeArguments(typeName).map(_.short).toList)
+  }
 
   private def withProgressCache[T](f: mutable.Set[String] => SchemaFor[T]): SchemaFor[T] = {
     var cache = deriveInProgress.get()
@@ -61,7 +63,7 @@ trait SchemaForMagnoliaDerivation {
   }
 
   def dispatch[T](ctx: SealedTrait[SchemaFor, T]): SchemaFor[T] = {
-    SchemaFor(SCoproduct(ctx.subtypes.map(_.typeclass.schema).toSet, None))
+    SchemaFor(SCoproduct(typeNameToObjectInfo(ctx.typeName), ctx.subtypes.map(_.typeclass.schema).toSet, None))
   }
 
   implicit def schemaForCaseClass[T]: SchemaFor[T] = macro Magnolia.gen[T]

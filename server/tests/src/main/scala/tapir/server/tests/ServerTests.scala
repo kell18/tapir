@@ -9,13 +9,13 @@ import cats.effect.{IO, Resource}
 import cats.implicits._
 import com.softwaremill.sttp._
 import com.softwaremill.sttp.asynchttpclient.cats.AsyncHttpClientCatsBackend
+import io.circe.generic.auto._
 import org.scalatest.{Assertion, BeforeAndAfterAll, FunSuite, Matchers}
+import tapir._
+import tapir.json.circe._
 import tapir.model.{MultiQueryParams, Part, SetCookieValue, UsernamePassword}
 import tapir.tests.TestUtil._
 import tapir.tests._
-import tapir._
-import tapir.json.circe._
-import io.circe.generic.auto._
 
 import scala.reflect.ClassTag
 
@@ -246,6 +246,14 @@ trait ServerTests[R[_], S, ROUTE] extends FunSuite with Matchers with BeforeAndA
         r.cookies.toList shouldBe List(
           com.softwaremill.sttp.Cookie("c1", "yx", None, None, None, Some("/"), secure = false, httpOnly = true)
         )
+      }
+  }
+
+  testServer(in_string_out_content_type_string, "dynamic content type")((b: String) => pureResult((b, "image/png").asRight[Unit])) {
+    baseUri =>
+      sttp.get(uri"$baseUri/api/echo").body("test").send().map { r =>
+        r.contentType shouldBe Some("image/png")
+        r.unsafeBody shouldBe "test"
       }
   }
 

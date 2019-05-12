@@ -2,6 +2,7 @@ package tapir.docs.openapi
 
 import io.circe.generic.auto._
 import org.scalatest.{FunSuite, Matchers}
+import tapir.Schema.{SProduct, SObjectInfo, SRef}
 import tapir._
 import tapir.docs.openapi.dtos.Book
 import tapir.docs.openapi.dtos.a.{Pet => APet}
@@ -137,16 +138,16 @@ class VerifyYamlTest extends FunSuite with Matchers {
 
     // work-around for #10: unsupported sealed trait families
     implicit val schemaForErrorInfo: SchemaFor[ErrorInfo] = new SchemaFor[ErrorInfo] {
-      override def schema: Schema = Schema.SObject(Schema.SObjectInfo("ErrorInfo"), Nil, Nil)
+      override def schema: Schema = Schema.SProduct(Schema.SObjectInfo("ErrorInfo"), Nil, Nil)
     }
 
     val e = endpoint.errorOut(
       statusFrom(
         jsonBody[ErrorInfo],
         StatusCodes.BadRequest,
-        whenClass[ErrorInfo.NotFound] -> StatusCodes.NotFound,
-        whenClass[ErrorInfo.Unauthorized] -> StatusCodes.Unauthorized
-      ).defaultSchema(schemaFor[ErrorInfo.Unknown])
+        whenClass[NotFound] -> StatusCodes.NotFound,
+        whenClass[Unauthorized] -> StatusCodes.Unauthorized
+      ).defaultSchema(schemaFor[Unknown])
     )
 
     // when
@@ -244,6 +245,16 @@ class VerifyYamlTest extends FunSuite with Matchers {
     actualYamlNoIndent shouldBe expectedYaml
   }
 
+  test("should unfold arrays") {
+    val e = endpoint.in(jsonBody[List[FruitAmount]]).out(plainBody[String])
+    val expectedYaml = loadYaml("expected_unfolded_array.yml")
+
+    val actualYaml = e.toOpenAPI(Info("Fruits", "1.0")).toYaml
+    val actualYamlNoIndent = noIndentation(actualYaml)
+
+    actualYamlNoIndent shouldBe expectedYaml
+  }
+
   test("should differentiate when a generic type is used multiple times") {
     val expectedYaml = loadYaml("expected_generic.yml")
 
@@ -255,8 +266,55 @@ class VerifyYamlTest extends FunSuite with Matchers {
     actualYamlNoIndent shouldBe expectedYaml
   }
 
+  test("should unfold objects from unfolded arrays") {
+    val expectedYaml = loadYaml("expected_unfolded_object_unfolded_array.yml")
+
+    val actualYaml = endpoint
+      .out(jsonBody[List[ObjectWrapper]])
+      .toOpenAPI(Info("Fruits", "1.0"))
+      .toYaml
+    val actualYamlNoIndent = noIndentation(actualYaml)
+
+    actualYamlNoIndent shouldBe expectedYaml
+  }
+
+  test("should unfold coproducts from unfolded arrays") {
+    val expectedYaml = loadYaml("expected_unfolded_coproduct_unfolded_array.yml")
+
+    val actualYaml = endpoint
+      .out(jsonBody[List[Entity]])
+      .toOpenAPI(Info("Entities", "1.0"))
+      .toYaml
+    val actualYamlNoIndent = noIndentation(actualYaml)
+    println(actualYaml)
+    actualYamlNoIndent shouldBe expectedYaml
+  }
+
+  test("should differentiate when a generic coproduct type is used multiple times") {
+    val expectedYaml = loadYaml("expected_generic_coproduct.yml")
+
+    val actualYaml = List(endpoint.in("p1" and jsonBody[GenericEntity[String]]), endpoint.in("p2" and jsonBody[GenericEntity[Int]]))
+      .toOpenAPI(Info("Fruits", "1.0"))
+      .toYaml
+    val actualYamlNoIndent = noIndentation(actualYaml)
+
+    actualYamlNoIndent shouldBe expectedYaml
+  }
+
+  test("should unfold arrays from object") {
+    val expectedYaml = loadYaml("expected_unfolded_array_unfolded_object.yml")
+
+    val actualYaml = endpoint
+      .out(jsonBody[ObjectWithList])
+      .toOpenAPI(Info("Entities", "1.0"))
+      .toYaml
+    val actualYamlNoIndent = noIndentation(actualYaml)
+
+    actualYamlNoIndent shouldBe expectedYaml
+  }
+
   private def loadYaml(fileName: String): String = {
-    noIndentation(Source.fromResource(fileName).getLines().mkString("\n"))
+    noIndentation(Source.fromInputStream(getClass.getResourceAsStream(s"/$fileName")).getLines().mkString("\n"))
   }
 
   private def noIndentation(s: String) = s.replaceAll("[ \t]", "").trim
@@ -274,8 +332,13 @@ case class Person(name: String, age: Int) extends Entity
 case class Organization(name: String) extends Entity
 
 sealed trait ErrorInfo
-object ErrorInfo {
-  case class NotFound(what: String) extends ErrorInfo
-  case class Unauthorized(realm: String) extends ErrorInfo
-  case class Unknown(code: Int, msg: String) extends ErrorInfo
-}
+case class NotFound(what: String) extends ErrorInfo
+case class Unauthorized(realm: String) extends ErrorInfo
+case class Unknown(code: Int, msg: String) extends ErrorInfo
+
+case class ObjectWrapper(value: FruitAmount)
+
+sealed trait GenericEntity[T]
+case class GenericPerson[T](data: T) extends GenericEntity[T]
+
+case class ObjectWithList(data: List[FruitAmount])

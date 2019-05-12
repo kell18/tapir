@@ -4,7 +4,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.time._
-import java.util.Date
+import java.util.{Date, UUID}
 
 import tapir.Schema._
 import tapir.generic.OneOfMacro.oneOfMacro
@@ -38,6 +38,7 @@ object SchemaFor extends SchemaForMagnoliaDerivation {
   implicit val schemaForDate: SchemaFor[Date] = SchemaFor(SDateTime)
   implicit val schemaForLocalDateTime: SchemaFor[LocalDateTime] = SchemaFor(SDateTime)
   implicit val schemaForLocalDate: SchemaFor[LocalDate] = SchemaFor(SDate)
+  implicit val schemaForUUID: SchemaFor[UUID] = SchemaFor(SString)
 
   implicit def schemaForOption[T: SchemaFor]: SchemaFor[Option[T]] = new SchemaFor[Option[T]] {
     override def schema: Schema = implicitly[SchemaFor[T]].schema
@@ -55,7 +56,7 @@ object SchemaFor extends SchemaForMagnoliaDerivation {
     override def schema: Schema = implicitly[SchemaFor[T]].schema
   }
 
-  implicit def schemaForMap[V: SchemaFor]: SchemaFor[Map[String, V]] = SchemaFor(SObject(SObjectInfo("Map"), List.empty, List.empty))
+  implicit def schemaForMap[V: SchemaFor]: SchemaFor[Map[String, V]] = SchemaFor(SProduct(SObjectInfo("Map"), List.empty, List.empty))
 
   def oneOf[E, V](extractor: E => V, asString: V => String)(mapping: (V, SchemaFor[_])*): SchemaFor[E] = macro oneOfMacro[E, V]
 }

@@ -12,27 +12,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Entity'
+                type: array
+                items:
+                  $ref: '#/components/schemas/ObjectWrapper'
 components:
   schemas:
-    Entity:
-      oneOf:
-        - $ref: '#/components/schemas/Person'
-        - $ref: '#/components/schemas/Organization'
-    Person:
+    ObjectWrapper:
       required:
-        - name
-        - age
+        - value
       type: object
       properties:
-        name:
+        value:
+          $ref: '#/components/schemas/FruitAmount'
+    FruitAmount:
+      required:
+        - fruit
+        - amount
+      type: object
+      properties:
+        fruit:
           type: string
-        age:
+        amount:
           type: integer
-    Organization:
-      required:
-        - name
-      type: object
-      properties:
-        name:
-          type: string

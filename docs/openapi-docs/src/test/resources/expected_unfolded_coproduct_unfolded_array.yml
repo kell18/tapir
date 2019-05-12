@@ -1,6 +1,6 @@
 openapi: 3.0.1
 info:
-  title: Fruits
+  title: Entities
   version: '1.0'
 paths:
   /:
@@ -12,25 +12,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/NestedEntity'
+                type: array
+                items:
+                  $ref: '#/components/schemas/Entity'
 components:
   schemas:
-    NestedEntity:
-      required:
-        - entity
-      type: object
-      properties:
-        entity:
-          $ref: '#/components/schemas/Entity'
     Entity:
       oneOf:
         - $ref: '#/components/schemas/Person'
         - $ref: '#/components/schemas/Organization'
-      discriminator:
-        propertyName: name
-        mapping:
-          john: '#/components/schemas/Person'
-          sml: '#/components/schemas/Organization'
     Person:
       required:
         - name
