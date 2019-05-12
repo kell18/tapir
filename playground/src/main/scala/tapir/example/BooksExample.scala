@@ -2,6 +2,7 @@ package tapir.example
 
 import java.util.Properties
 import com.typesafe.scalalogging.StrictLogging
+import sangria.schema.{Action, Context}
 import tapir.example.Endpoints.Limit
 import tapir.internal.server.{DecodeInputs, DecodeInputsContext, DecodeInputsResult}
 import tapir.{Endpoint, EndpointIO}
@@ -25,6 +26,7 @@ object GraphQLResource {
   import sangria.schema.Field
   import sangria.schema.OutputType
   import sangria.schema.{StringType, IntType, ObjectType}
+
 
 
   // @annotations.tailrecursive
@@ -54,23 +56,56 @@ object GraphQLResource {
 
   case class InvalidEndpoint(reason: String) extends Exception(reason)
 
+  case class ResolverNotFound(name: String) extends Exception(s"Cannot find GraphQL resolver $name.")
 
-  class ToGQL[I, E, O, S[_]](e: Endpoint[I, E, O, S]) {
+  // .. general architectural idea (apply this after it'll be possible to generate GQL bellow):
+  // def resolvers: Map[Name, Resolvable[Val, Ctx]] = ???
+  //
+  // ep.interpret { inputs =>
+  //   // do whatever you want with inputs
+  //   Utils.ToGraphQL(inputs)(resolvers)
+  // }
+  // OR ep.toGraphQL(resolvers)
+
+
+  trait Resolvable[Val, Ctx] extends (Context[Ctx, Val] => Action[Ctx, _])
+
+  type Name = String
+
+  case class NamedResolvers[Ctx, Val](resolvers: Map[Name, Resolvable[Val, Ctx]])
+
+
+  class ToGQL[I, E, O, S[_]](ep: Endpoint[I, E, O, S]) {
     def apply(logic: I => Future[Either[E, O]]): ObjectType[DecodeInputsContext, I] = {
 
-      def decodeBody[Ctx, Val](result: DecodeInputsResult): ObjectType[DecodeInputsContext, DecodeInputsResult] = {
+      def decodeBody[Ctx, Val](resolvers: Map[Name, Resolvable[Val, Ctx]]): ObjectType[DecodeInputsContext, DecodeInputsResult] = {
         result match {
           case values: DecodeInputsResult.Values =>
             values.bodyInput match {
               case Some(bodyInput@EndpointIO.Body(codec, info)) => {
-                val name = e.info.name.getOrElse(throw InvalidEndpoint("Endpoint name is required to generate GraphQL"))
-                // .. keep going: you can do both in and out with GQL (depends on resolvers)
-                // .. think on resolvers
-                // .. test on some examples
-                ObjectType(name, e.info.description, fields[Ctx, Val](
+                val name = ep.info.name.getOrElse(throw InvalidEndpoint("Endpoint name is required to generate GraphQL"))
+
+                val in: ObjectType[Ctx, I] = ???
+
+                // .. find a name for the all fields
+                codec.meta.schema match {
+                  case s@SString => Field(s.show, StringType)
+                  case SObject(objInfo, fields, required) => {
+                    ObjectType(
+                      objInfo.fullName,
+                      fields.map { case (fName, fSchema) =>
+                        // .. double check
+                        val r = resolvers.getOrElse(fName, throw ResolverNotFound(fName))
+                        Field(fName, makeFields(fSchema), resolve = r)
+                      }
+                    )
+                  }
+                }
+
+                val out = ObjectType(name, ep.info.description, fields[Ctx, O](
 
                 ))
-                codec.meta.schema
+
               }
             }
           case failure: DecodeInputsResult.Failure =>
@@ -80,7 +115,7 @@ object GraphQLResource {
       }
 
       val context: DecodeInputsContext = ??? // .. Own wrapper?
-      val decodedInput: DecodeInputsResult = DecodeInputs(e.input, context)
+      val decodedInput: DecodeInputsResult = DecodeInputs(ep.input, context)
 
       decodeBody(decodedInput) // .. set types right or at least cast type to I
       ???
