@@ -3,8 +3,8 @@
 To use, add the following dependencies:
 
 ```scala
-"com.softwaremill.tapir" %% "tapir-openapi-docs" % "0.7.9"
-"com.softwaremill.tapir" %% "tapir-openapi-circe-yaml" % "0.7.9"
+"com.softwaremill.tapir" %% "tapir-openapi-docs" % "0.7.10"
+"com.softwaremill.tapir" %% "tapir-openapi-circe-yaml" % "0.7.10"
 ```
 
 Tapir contains a case class-based model of the openapi data structures in the `openapi/openapi-model` subproject (the
@@ -54,23 +54,26 @@ val SwaggerYml = "swagger.yml"
 private val redirectToIndex: Route =
   redirect(s"/swagger/index.html?url=/swagger/$SwaggerYml", StatusCodes.PermanentRedirect) 
 
+// needed only if you use oauth2 authorization
+private def redirectToOath2(query: String): Route =
+    redirect(s"/swagger/oauth2-redirect.html$query", StatusCodes.PermanentRedirect)
+
 private val swaggerVersion = {
   val p = new Properties()
   p.load(getClass.getResourceAsStream("/META-INF/maven/org.webjars/swagger-ui/pom.properties"))
   p.getProperty("version")
 }
 
-val routes: Route =
-  path("swagger") {
-    redirectToIndex
+val routes: Route =   
+  pathPrefix("swagger") {
+    pathEndOrSingleSlash {
+      redirectToIndex
+    } ~ path(SwaggerYml) {
+      complete(yml)
+    } ~ getFromResourceDirectory(s"META-INF/resources/webjars/swagger-ui/$swaggerVersion/")
   } ~
-    pathPrefix("swagger") {
-      path("") { // this is for trailing slash
-        redirectToIndex
-      } ~
-        path(SwaggerYml) {
-          complete(yml)
-        } ~
-        getFromResourceDirectory(s"META-INF/resources/webjars/swagger-ui/$swaggerVersion/")
-    }
+  // needed only if you use oauth2 authorization
+  path("oauth2-redirect.html") { request => 
+    redirectToOath2(request.request.uri.rawQueryString.map(s => '?' + s).getOrElse(""))(request)
+  }
 ```
