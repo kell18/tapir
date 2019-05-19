@@ -146,6 +146,20 @@ lazy val akkaHttpServer: Project = (project in file("server/akka-http-server"))
   )
   .dependsOn(core, serverTests % "test")
 
+lazy val graphQlServer: Project = (project in file("server/graphql-server"))
+  .settings(commonSettings: _*)
+  .settings(
+    name := "graphql-server",
+    libraryDependencies ++= Seq(
+      "com.typesafe.akka" %% "akka-http" % "10.1.8",
+      "com.typesafe.akka" %% "akka-stream" % "2.5.22",
+
+      "org.sangria-graphql" %% "sangria" % "1.4.2",
+      "org.sangria-graphql" %% "sangria-circe" % "1.2.1"
+    )
+  )
+  .dependsOn(core, serverTests % "test")
+
 lazy val http4sServer: Project = (project in file("server/http4s-server"))
   .settings(commonSettings: _*)
   .settings(
