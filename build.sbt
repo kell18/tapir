@@ -71,7 +71,7 @@ lazy val core: Project = (project in file("core"))
   .settings(
     name := "tapir-core",
     libraryDependencies ++= Seq(
-      "com.propensive" %% "magnolia" % "0.12.2",
+      "com.propensive" %% "magnolia" % "0.12.3",
       "com.softwaremill.sttp.client" %% "model" % Versions.sttp,
       scalaTest % "test"
     ),
@@ -257,6 +257,31 @@ lazy val akkaHttpServer: Project = (project in file("server/akka-http-server"))
   )
   .dependsOn(core, serverTests % "test")
 
+lazy val graphQlServer: Project = (project in file("server/graphql-server"))
+  .settings(commonSettings: _*)
+  .settings(
+    name := "graphql-server",
+    libraryDependencies ++= Seq(
+      // .. Try to use caliban.RootResolver and caliban.GraphQL directly in Tapir, seems very possible,
+      // all that is needed - caliban.Schema instances for input, queries, mutations, subscriptions
+      "com.github.ghostdogpr" %% "caliban" % "0.3.0",
+      "com.github.ghostdogpr" %% "caliban-http4s" % "0.3.0", // routes for http4s
+      "com.github.ghostdogpr" %% "caliban-cats"   % "0.3.0", // interop with cats effect
+
+      "dev.zio" %% "zio" % "1.0.0-RC17",
+      "dev.zio" %% "zio-interop-cats" % "2.0.0.0-RC10",
+      "org.typelevel" %% "cats-effect" % "2.0.0",
+      "org.http4s" %% "http4s-dsl" % Versions.http4s,
+
+      "com.typesafe.akka" %% "akka-http" % "10.1.8",
+      "com.typesafe.akka" %% "akka-stream" % "2.5.22",
+
+      "org.sangria-graphql" %% "sangria" % "1.4.2",
+      "org.sangria-graphql" %% "sangria-circe" % "1.2.1"
+    )
+  )
+  .dependsOn(core, openapiCirceYaml, openapiDocs, circeJson, swaggerUiAkka, serverTests % "test")
+
 lazy val http4sServer: Project = (project in file("server/http4s-server"))
   .settings(commonSettings)
   .settings(
@@ -356,10 +381,11 @@ lazy val playground: Project = (project in file("playground"))
       "dev.zio" %% "zio" % "1.0.0-RC17",
       "dev.zio" %% "zio-interop-cats" % "2.0.0.0-RC10",
       "org.typelevel" %% "cats-effect" % "2.0.0",
-      "io.swagger" % "swagger-annotations" % "1.6.0"
-    ),
-    libraryDependencies ++= Seq(
-      "com.softwaremill.sttp.client" %% "akka-http-backend" % Versions.sttp
+      "io.swagger" % "swagger-annotations" % "1.6.0",
+      "com.softwaremill.sttp.client" %% "akka-http-backend" % Versions.sttp,
+
+      "org.sangria-graphql" %% "sangria" % "1.4.2",
+      "org.sangria-graphql" %% "sangria-circe" % "1.2.1"
     ),
     libraryDependencies ++= loggerDependencies,
     publishArtifact := false
