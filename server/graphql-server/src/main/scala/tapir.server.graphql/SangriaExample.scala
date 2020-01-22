@@ -1,231 +1,110 @@
 package tapir.server.graphql
 
+import Endpoints._
+import sangria.marshalling.FromInput
+import sangria.schema.{ListType, ObjectType, OutputType, ValidOutType, Value}
+
 object SangriaExample
 
+case class Country(name: String)
+case class Author(name: String, country: Country)
+case class Genre(name: String, description: String)
+case class Book(title: String, genre: Genre, year: Int, author: Author)
+case class BooksQuery(genre: Option[String], limit: Limit)
 
-object Episode extends Enumeration {
-  val NEWHOPE, EMPIRE, JEDI = Value
-}
-
-
-
-trait Character {
-  def id: String
-  def name: Option[String]
-  def friends: List[String]
-  def appearsIn: List[Episode.Value]
-}
-
-case class Human(
-  id: String,
-  name: Option[String],
-  friends: List[String],
-  appearsIn: List[Episode.Value],
-  homePlanet: Option[String]) extends Character
-
-case class Droid(
-  id: String,
-  name: Option[String],
-  friends: List[String],
-  appearsIn: List[Episode.Value],
-  primaryFunction: Option[String]) extends Character
-
-class CharacterRepo {
-  import CharacterRepo._
-
-  def getHero(episode: Option[Episode.Value]) =
-    episode flatMap (_ ⇒ getHuman("1000")) getOrElse droids.last
-
-  def getHuman(id: String): Option[Human] = humans.find(c ⇒ c.id == id)
-
-  def getDroid(id: String): Option[Droid] = droids.find(c ⇒ c.id == id)
-
-  def getHumans(limit: Int, offset: Int): List[Human] = humans.drop(offset).take(limit)
-
-  def getDroids(limit: Int, offset: Int): List[Droid] = droids.drop(offset).take(limit)
-}
-
-object CharacterRepo {
-  val humans = List(
-    Human(
-      id = "1000",
-      name = Some("Luke Skywalker"),
-      friends = List("1002", "1003", "2000", "2001"),
-      appearsIn = List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI),
-      homePlanet = Some("Tatooine")),
-    Human(
-      id = "1001",
-      name = Some("Darth Vader"),
-      friends = List("1004"),
-      appearsIn = List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI),
-      homePlanet = Some("Tatooine")),
-    Human(
-      id = "1002",
-      name = Some("Han Solo"),
-      friends = List("1000", "1003", "2001"),
-      appearsIn = List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI),
-      homePlanet = None),
-    Human(
-      id = "1003",
-      name = Some("Leia Organa"),
-      friends = List("1000", "1002", "2000", "2001"),
-      appearsIn = List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI),
-      homePlanet = Some("Alderaan")),
-    Human(
-      id = "1004",
-      name = Some("Wilhuff Tarkin"),
-      friends = List("1001"),
-      appearsIn = List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI),
-      homePlanet = None)
-  )
-
-  val droids = List(
-    Droid(
-      id = "2000",
-      name = Some("C-3PO"),
-      friends = List("1000", "1002", "1003", "2001"),
-      appearsIn = List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI),
-      primaryFunction = Some("Protocol")),
-    Droid(
-      id = "2001",
-      name = Some("R2-D2"),
-      friends = List("1000", "1002", "1003"),
-      appearsIn = List(Episode.NEWHOPE, Episode.EMPIRE, Episode.JEDI),
-      primaryFunction = Some("Astromech"))
-  )
-}
-
-import sangria.execution.deferred.{Fetcher, HasId}
-import sangria.execution.Executor
-import sangria.schema._
-import scala.concurrent.Future
+class BooksRepo {}
 
 /**
- * Defines a GraphQL schema for the current project
- */
-object SchemaDefinition {
-  /**
-    * Resolves the lists of characters. These resolutions are batched and
-    * cached for the duration of a query.
-    */
-  val characters = Fetcher.caching(
-    (ctx: CharacterRepo, ids: Seq[String]) ⇒
-      Future.successful(ids.flatMap(id ⇒ ctx.getHuman(id) orElse ctx.getDroid(id))))(HasId(_.id))
+  * Descriptions of endpoints used in the example.
+  */
+object Endpoints {
+  import io.circe.generic.auto._
+  import sttp.tapir._
+  import sttp.tapir.json.circe._
 
-  val EpisodeEnum = EnumType(
-    "Episode",
-    Some("One of the films in the Star Wars Trilogy"),
-    List(
-      EnumValue("NEWHOPE",
-        value = Episode.NEWHOPE,
-        description = Some("Released in 1977.")),
-      EnumValue("EMPIRE",
-        value = Episode.EMPIRE,
-        description = Some("Released in 1980.")),
-      EnumValue("JEDI",
-        value = Episode.JEDI,
-        description = Some("Released in 1983."))))
+  type Limit = Option[Int]
+  type AuthToken = String
 
-  val Character: InterfaceType[CharacterRepo, Character] =
-    InterfaceType(
-      "Character",
-      "A character in the Star Wars Trilogy",
-      () ⇒ fields[CharacterRepo, Character](
-        Field("id", StringType,
-          Some("The id of the character."),
-          resolve = _.value.id),
-        Field("name", OptionType(StringType),
-          Some("The name of the character."),
-          resolve = _.value.name),
-        Field("friends", ListType(Character),
-          Some("The friends of the character, or an empty list if they have none."),
-          resolve = ctx ⇒ characters.deferSeqOpt(ctx.value.friends)),
-        Field("appearsIn", OptionType(ListType(OptionType(EpisodeEnum))),
-          Some("Which movies they appear in."),
-          resolve = _.value.appearsIn map (e ⇒ Some(e)))
-      ))
+  // All endpoints report errors as strings, and have the common path prefix '/books'
+  private val baseEndpoint = endpoint.errorOut(stringBody).in("books")
 
-  val Human =
-    ObjectType(
-      "Human",
-      "A humanoid creature in the Star Wars universe.",
-      interfaces[CharacterRepo, Human](Character),
-      fields[CharacterRepo, Human](
-        Field("id", StringType,
-          Some("The id of the human."),
-          resolve = _.value.id),
-        Field("name", OptionType(StringType),
-          Some("The name of the human."),
-          resolve = _.value.name),
-        Field("friends", ListType(Character),
-          Some("The friends of the human, or an empty list if they have none."),
-          resolve = ctx ⇒ characters.deferSeqOpt(ctx.value.friends)),
-        Field("appearsIn", OptionType(ListType(OptionType(EpisodeEnum))),
-          Some("Which movies they appear in."),
-          resolve = _.value.appearsIn map (e ⇒ Some(e))),
-        Field("homePlanet", OptionType(StringType),
-          Some("The home planet of the human, or null if unknown."),
-          resolve = _.value.homePlanet)
-      ))
+  // The path for this endpoint will be '/books/add', as we are using the base endpoint
+  val addBook: Endpoint[(Book, AuthToken), String, Unit, Nothing] = baseEndpoint.post
+    .in("add")
+    .in(
+      jsonBody[Book]
+        .description("The book to add")
+        .example(Book("Pride and Prejudice", Genre("Novel", ""), 1813, Author("Jane Austen", Country("United Kingdom"))))
+    )
+    .in(header[String]("X-Auth-Token").description("The token is 'secret'"))
 
-  val Droid = ObjectType(
-    "Droid",
-    "A mechanical creature in the Star Wars universe.",
-    interfaces[CharacterRepo, Droid](Character),
-    fields[CharacterRepo, Droid](
-      Field("id", StringType,
-        Some("The id of the droid."),
-        resolve = _.value.id),
-      Field("name", OptionType(StringType),
-        Some("The name of the droid."),
-        resolve = ctx ⇒ Future.successful(ctx.value.name)),
-      Field("friends", ListType(Character),
-        Some("The friends of the droid, or an empty list if they have none."),
-        resolve = ctx ⇒ characters.deferSeqOpt(ctx.value.friends)),
-      Field("appearsIn", OptionType(ListType(OptionType(EpisodeEnum))),
-        Some("Which movies they appear in."),
-        resolve = _.value.appearsIn map (e ⇒ Some(e))),
-      Field("primaryFunction", OptionType(StringType),
-        Some("The primary function of the droid."),
-        resolve = _.value.primaryFunction)
-    ))
+  // Re-usable parameter description
+  private val limitParameter = query[Int]("limit").description("Maximum number of books to retrieve")
 
-  val ID = Argument("id", StringType, description = "id of the character")
+  val booksListing: Endpoint[Int, String, Seq[Book], Nothing] = baseEndpoint.get
+    .in("list" / "all")
+    .in(limitParameter)
+    .out(jsonBody[Seq[Book]])
 
-  val EpisodeArg = Argument("episode", OptionInputType(EpisodeEnum),
-    description = "If omitted, returns the hero of the whole saga. If provided, returns the hero of that particular episode.")
+  /*val booksListingByGenre: Endpoint[BooksQuery, String, Vector[Book], Nothing] = baseEndpoint.get
+    .in(("list" / path[String]("genre").map(Some(_))(_.get)).and(limitParameter).mapTo(BooksQuery))
+    .out(jsonBody[Vector[Book]])*/
+}
 
-  val LimitArg = Argument("limit", OptionInputType(IntType), defaultValue = 20)
-  val OffsetArg = Argument("offset", OptionInputType(IntType), defaultValue = 0)
+object BooksExample extends App {
+  import EndpointToSangria.RichSangriaEndpoint
+  import Endpoints._
+  import sangria.macros.derive._
+  import akka.http.scaladsl.server.Route
 
-  case class Rand(i: Int)
+  implicit val countryType = deriveObjectType[Unit, Country](ObjectTypeDescription("The country"))
+  implicit val authorType = deriveObjectType[Unit, Author](ObjectTypeDescription("The author"))
+  implicit val genreType = deriveObjectType[Unit, Genre](ObjectTypeDescription("The genre"))
+  implicit val bookType: ObjectType[Unit, Book] = deriveObjectType[Unit, Book](ObjectTypeDescription("The book"))
+  implicit val booksType: ListType[Book] = ListType(bookType)
 
-  val Query = ObjectType(
-    "Query", fields[CharacterRepo, Unit](
-      /*Field("Rand", Rand,
-        arguments = Nil,
-        resolve = ctx => ctx.ctx
-      ),*/
-      Field("human", OptionType(Human),
-        arguments = ID :: Nil,
-        resolve = ctx ⇒ ctx.ctx.getHuman(ctx arg ID)),
-      Field("droid", Droid,
-        arguments = ID :: Nil,
-        resolve = ctx ⇒ ctx.ctx.getDroid(ctx arg ID).get),
-      Field("humans", ListType(Human),
-        arguments = LimitArg :: OffsetArg :: Nil,
-        resolve = ctx ⇒ ctx.ctx.getHumans(ctx arg LimitArg, ctx arg OffsetArg)),
-      Field("droids", ListType(Droid),
-        arguments = LimitArg :: OffsetArg :: Nil,
-        resolve = ctx ⇒ ctx.ctx.getDroids(ctx arg LimitArg, ctx arg OffsetArg)),
+  // implicit val outType: OutputType[Vector[Book]] = ???
+  implicit val validOut: ValidOutType[Int, Seq[Book]] = ???
+  implicit val fromInput: FromInput[Int] = ???
 
-      Field("hero", Character,
-        arguments = EpisodeArg :: Nil,
-        deprecationReason = Some("Use `human` or `droid` fields instead"),
-        resolve = (ctx) ⇒ ctx.ctx.getHero(ctx.arg(EpisodeArg)))
-    ))
+  val books = booksListing.toSangriaField[Library](x => Value[Library, Seq[Book]](x.ctx.getAllBooks))(
+    booksType,
+    validOut,
+    fromInput
+  )
+}
 
-  val StarWarsSchema = Schema(Query)
+class Library {
+  import java.util.concurrent.atomic.AtomicReference
 
-  // Executor.execute(StarWarsSchema)
+  val Books = new AtomicReference(
+    Seq(
+      Book(
+        "The Sorrows of Young Werther",
+        Genre("Novel", "Novel is genre"),
+        1774,
+        Author("Johann Wolfgang von Goethe", Country("Germany"))
+      ),
+      Book("Iliad", Genre("Poetry", ""), -8000, Author("Homer", Country("Greece"))),
+      Book("Nad Niemnem", Genre("Novel", ""), 1888, Author("Eliza Orzeszkowa", Country("Poland"))),
+      Book("The Colour of Magic", Genre("Fantasy", ""), 1983, Author("Terry Pratchett", Country("United Kingdom"))),
+      Book("The Art of Computer Programming", Genre("Non-fiction", ""), 1968, Author("Donald Knuth", Country("USA"))),
+      Book("Pharaoh", Genre("Novel", ""), 1897, Author("Boleslaw Prus", Country("Poland")))
+    )
+  )
+
+  def getAllBooks: Seq[Book] = Books.get()
+
+  /*def getBooks(query: BooksQuery): Seq[Book] = {
+    val allBooks = Books.get()
+    val limitedBooks = query.limit match {
+      case None    => allBooks
+      case Some(l) => allBooks.take(l)
+    }
+    val filteredBooks = query.genre match {
+      case None    => limitedBooks
+      case Some(g) => limitedBooks.filter(_.genre.name.equalsIgnoreCase(g))
+    }
+    filteredBooks
+  }*/
 }

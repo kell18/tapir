@@ -11,7 +11,7 @@ import scala.reflect.ClassTag
 object EndpointToSangria {
   type Resolver[Ctx, Val] = Context[Ctx, Val] ⇒ Action[Ctx, _]
 
-  implicit class RichSangriaEndpoint[I, O, E](endpoint: Endpoint[I, O, E, _])(implicit iClassTag: ClassTag[I]) {
+  implicit class RichSangriaEndpoint[I, E, O](endpoint: Endpoint[I, E, O, _])(implicit iClassTag: ClassTag[I]) {
     /*def toSangriaQuery[Ctx](resolver: Resolver[Ctx, Any])(name: String)(
       implicit outType: ObjectType[Ctx, O]
     ): ObjectType[Ctx, _] = {
@@ -20,16 +20,14 @@ object EndpointToSangria {
     }*/
 
     // Query.Field is something like one endpoint - args + resolve method
-    def toSangriaField[Ctx, Val, Res](resolve: Context[Ctx, Any] => Action[Ctx, Res])(
+    def toSangriaField[Ctx](resolve: Context[Ctx, Any] => Action[Ctx, O])(
         implicit outType: OutputType[O],
-        validOutType: ValidOutType[Res, O],
+        validOutType: ValidOutType[I, O],
         fromInput: FromInput[I]
     ): Field[Ctx, Any] = {
       @scala.annotation.tailrec
       def inputToArgs(input: EndpointInput[I]): List[Argument[_]] = {
         input match {
-          case EndpointInput.FixedMethod(_) => List.empty
-          case EndpointInput.FixedPath(_)   => List.empty
           case p @ EndpointInput.PathCapture(codec, name, info) =>
             Argument(name.getOrElse(p.show), schemaToSInputType(codec.meta.schema), info.description.getOrElse("")) :: Nil
           case q @ EndpointInput.Query(name, codec, info) =>
@@ -37,13 +35,16 @@ object EndpointToSangria {
           case EndpointInput.Cookie(name, codec, info) =>
             Argument(name, schemaToSInputType(codec.meta.schema), info.description.getOrElse(name)) :: Nil
           case a: EndpointInput.Auth[I] => inputToArgs(a.input)
+
           // ? mb use DecodeInputs? Or plainTypeToSArg?
           case e: EndpointInput.ExtractFromRequest[I] => ???
           case EndpointInput.Mapped(wrapped, _, _)    => ???
           case EndpointInput.Multiple(inputs)         => ???
-          case EndpointInput.QueryParams(_)           => ???
-          case EndpointInput.PathsCapture(_)          => ???
+          // case EndpointInput.QueryParams(_)           => ???
+          // case EndpointInput.PathsCapture(_)          => ???
           case io: EndpointIO[I]                      => ioToArgs(io)
+
+          case _ => List.empty
         }
       }
 
@@ -59,6 +60,7 @@ object EndpointToSangria {
       val args = inputToArgs(endpoint.input)
       Field(fName.getOrElse(endpoint.renderPathTemplate()), outType, description, args, resolve)
     }
+
 
     def schemaToSInputType[T: ClassTag](schema: Schema[T]): InputType[T] = {
       val tName = implicitly[ClassTag[T]].getClass.getSimpleName
