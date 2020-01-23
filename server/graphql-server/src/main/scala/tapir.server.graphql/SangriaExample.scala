@@ -2,7 +2,8 @@ package tapir.server.graphql
 
 import Endpoints._
 import sangria.marshalling.FromInput
-import sangria.schema.{ListType, ObjectType, OutputType, ValidOutType, Value}
+import sangria.schema.{fields, ListType, ObjectType, OutputType, Schema, ValidOutType, Value}
+import scala.concurrent.{Await, Future}
 
 object SangriaExample
 
@@ -45,17 +46,26 @@ object Endpoints {
     .in("list" / "all")
     .in(limitParameter)
     .out(jsonBody[Seq[Book]])
+    .info(EndpointInfo(Some("BooksListing"), None, None, Vector.empty))
 
   /*val booksListingByGenre: Endpoint[BooksQuery, String, Vector[Book], Nothing] = baseEndpoint.get
     .in(("list" / path[String]("genre").map(Some(_))(_.get)).and(limitParameter).mapTo(BooksQuery))
     .out(jsonBody[Vector[Book]])*/
 }
 
-object BooksExample extends App {
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import spray.json._
+
+object BooksExample extends App with SprayJsonSupport with DefaultJsonProtocol {
   import EndpointToSangria.RichSangriaEndpoint
   import Endpoints._
   import sangria.macros.derive._
   import akka.http.scaladsl.server.Route
+
+  implicit val countryFmt = jsonFormat1(Country.apply)
+  implicit val authorFmt = jsonFormat2(Author.apply)
+  implicit val genreFmt = jsonFormat2(Genre.apply)
+  implicit val bookFmt = jsonFormat4(Book.apply)
 
   implicit val countryType = deriveObjectType[Unit, Country](ObjectTypeDescription("The country"))
   implicit val authorType = deriveObjectType[Unit, Author](ObjectTypeDescription("The author"))
@@ -64,14 +74,46 @@ object BooksExample extends App {
   implicit val booksType: ListType[Book] = ListType(bookType)
 
   // implicit val outType: OutputType[Vector[Book]] = ???
-  implicit val validOut: ValidOutType[Int, Seq[Book]] = ???
-  implicit val fromInput: FromInput[Int] = ???
+  // implicit val validOut: ValidOutType[Int, Seq[Book]] = ???
+  // implicit val fromInput: FromInput[Int] = FromInput.defaultInput[Int]
 
-  val books = booksListing.toSangriaField[Library](x => Value[Library, Seq[Book]](x.ctx.getAllBooks))(
+  val books = booksListing.toSangriaField[Library](x => Value[Library, Seq[Book]](x.ctx.getAllBooks))/*(
     booksType,
     validOut,
     fromInput
-  )
+  )*/
+
+  val query = ObjectType("Query", fields[Library, Any](books))
+
+  val schema = Schema(query)
+
+  println(schema.renderPretty)
+
+  import sangria.macros._
+  import sangria.execution._
+  import sangria.marshalling.circe._
+  import io.circe.Json
+  import scala.concurrent.ExecutionContext.Implicits.global
+  import scala.concurrent.duration._
+
+  val q =
+  graphql"""
+    query MyBooks {
+      BooksListing(limit: 1) {
+        title
+        year
+      }
+    }
+  """
+
+  val future: Future[Json] = Executor.execute(schema, q, new Library)
+  val result = Await.result(future, 10.seconds)
+
+  println("")
+  println("-----------")
+  println("")
+  println(result)
+
 }
 
 class Library {

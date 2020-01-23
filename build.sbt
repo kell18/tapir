@@ -274,6 +274,7 @@ lazy val graphQlServer: Project = (project in file("server/graphql-server"))
       "org.http4s" %% "http4s-dsl" % Versions.http4s,
 
       "com.typesafe.akka" %% "akka-http" % "10.1.8",
+      "com.typesafe.akka" %% "akka-http-spray-json" % "10.1.8",
       "com.typesafe.akka" %% "akka-stream" % "2.5.22",
 
       "org.sangria-graphql" %% "sangria" % "1.4.2",

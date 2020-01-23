@@ -21,46 +21,68 @@ object EndpointToSangria {
 
     // Query.Field is something like one endpoint - args + resolve method
     def toSangriaField[Ctx](resolve: Context[Ctx, Any] => Action[Ctx, O])(
-        implicit outType: OutputType[O],
-        validOutType: ValidOutType[I, O],
-        fromInput: FromInput[I]
+        implicit outType: OutputType[O]
     ): Field[Ctx, Any] = {
-      @scala.annotation.tailrec
-      def inputToArgs(input: EndpointInput[I]): List[Argument[_]] = {
+      def inputToArgs(input: EndpointInput[_]): List[Argument[_]] = {
         input match {
           case p @ EndpointInput.PathCapture(codec, name, info) =>
-            Argument(name.getOrElse(p.show), schemaToSInputType(codec.meta.schema), info.description.getOrElse("")) :: Nil
+            Argument(
+              name = name.getOrElse(p.show),
+              argumentType = schemaToSInputType(codec.meta.schema),
+              description = info.description,
+              defaultValue = None,
+              fromInput = FromInput.defaultInput[Any],
+              astDirectives = Vector.empty,
+              astNodes = Vector.empty
+            ) :: Nil
           case q @ EndpointInput.Query(name, codec, info) =>
-            Argument(name, schemaToSInputType(codec.meta.schema), info.description.getOrElse(name)) :: Nil
+            Argument(
+              name = name,
+              argumentType = schemaToSInputType(codec.meta.schema),
+              description = info.description,
+              defaultValue = None,
+              fromInput = FromInput.defaultInput[Any],
+              astDirectives = Vector.empty,
+              astNodes = Vector.empty
+            ) :: Nil
           case EndpointInput.Cookie(name, codec, info) =>
-            Argument(name, schemaToSInputType(codec.meta.schema), info.description.getOrElse(name)) :: Nil
+            Argument(
+              name = name,
+              argumentType = schemaToSInputType(codec.meta.schema),
+              description = info.description,
+              defaultValue = None,
+              fromInput = FromInput.defaultInput[Any],
+              astDirectives = Vector.empty,
+              astNodes = Vector.empty
+            ) :: Nil
           case a: EndpointInput.Auth[I] => inputToArgs(a.input)
 
           // ? mb use DecodeInputs? Or plainTypeToSArg?
           case e: EndpointInput.ExtractFromRequest[I] => ???
           case EndpointInput.Mapped(wrapped, _, _)    => ???
-          case EndpointInput.Multiple(inputs)         => ???
+          case EndpointInput.Multiple(inputs)         =>
+            inputs.flatMap(x => inputToArgs(x.asInstanceOf[EndpointInput[_]])).toList
           // case EndpointInput.QueryParams(_)           => ???
           // case EndpointInput.PathsCapture(_)          => ???
-          case io: EndpointIO[I]                      => ioToArgs(io)
+          case io: EndpointIO[I] => ??? // ioToArgs(io)
 
           case _ => List.empty
         }
       }
 
-      def ioToArgs(io: EndpointIO[I]): List[Argument[_]] = {
+      /*def ioToArgs(io: EndpointIO[I]): List[Argument[_]] = {
         io match {
           case EndpointIO.Body(codec, info) =>
             Argument(iClassTag.getClass.getSimpleName, schemaToSInputType(codec.meta.schema), info.description.getOrElse("Endpoint body")) :: Nil
           case _ => ??? // ..
         }
-      }
+      }*/
 
       val EndpointInfo(fName, summary, description, tags) = endpoint.info
+      val nonEmptyName = fName.getOrElse(sys.error("Endpoint.info.name is required for Sangria Field"))
       val args = inputToArgs(endpoint.input)
-      Field(fName.getOrElse(endpoint.renderPathTemplate()), outType, description, args, resolve)
+      Field(nonEmptyName, outType, description, args, resolve)
     }
-
 
     def schemaToSInputType[T: ClassTag](schema: Schema[T]): InputType[T] = {
       val tName = implicitly[ClassTag[T]].getClass.getSimpleName
