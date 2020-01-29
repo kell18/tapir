@@ -1,7 +1,6 @@
 package tapir.server.graphql
 
 import Endpoints._
-import sangria.marshalling.FromInput
 import sangria.schema.{fields, ListType, ObjectType, OutputType, Schema, ValidOutType, Value}
 import scala.concurrent.{Await, Future}
 
@@ -77,11 +76,9 @@ object BooksExample extends App with SprayJsonSupport with DefaultJsonProtocol {
   // implicit val validOut: ValidOutType[Int, Seq[Book]] = ???
   // implicit val fromInput: FromInput[Int] = FromInput.defaultInput[Int]
 
-  val books = booksListing.toSangriaField[Library](x => Value[Library, Seq[Book]](x.ctx.getAllBooks))/*(
-    booksType,
-    validOut,
-    fromInput
-  )*/
+  val books = booksListing.toSangriaField[Library, Any] { case (arg, ctx) =>
+    Value[Library, Seq[Book]](ctx.ctx.getBooks(ctx.arg(arg)))
+  }
 
   val query = ObjectType("Query", fields[Library, Any](books))
 
@@ -99,14 +96,15 @@ object BooksExample extends App with SprayJsonSupport with DefaultJsonProtocol {
   val q =
   graphql"""
     query MyBooks {
-      BooksListing(limit: 1) {
+      BooksListing(limit: 2) {
         title
         year
       }
     }
   """
 
-  val future: Future[Json] = Executor.execute(schema, q, new Library)
+  // .. on future - find out how to use Val
+  val future: Future[Json] = Executor.execute(schema, q, new Library, root = ())
   val result = Await.result(future, 10.seconds)
 
   println("")
@@ -136,6 +134,9 @@ class Library {
   )
 
   def getAllBooks: Seq[Book] = Books.get()
+
+  def getBooks(limit: Int) =
+    getAllBooks.take(limit)
 
   /*def getBooks(query: BooksQuery): Seq[Book] = {
     val allBooks = Books.get()

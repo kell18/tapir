@@ -20,9 +20,9 @@ object EndpointToSangria {
     }*/
 
     // Query.Field is something like one endpoint - args + resolve method
-    def toSangriaField[Ctx](resolve: Context[Ctx, Any] => Action[Ctx, O])(
+    def toSangriaField[Ctx, Val](resolve: (Argument[I], Context[Ctx, Val]) => Action[Ctx, O])(
         implicit outType: OutputType[O]
-    ): Field[Ctx, Any] = {
+    ): Field[Ctx, Val] = {
       def inputToArgs(input: EndpointInput[_]): List[Argument[_]] = {
         input match {
           case p @ EndpointInput.PathCapture(codec, name, info) =>
@@ -80,9 +80,12 @@ object EndpointToSangria {
 
       val EndpointInfo(fName, summary, description, tags) = endpoint.info
       val nonEmptyName = fName.getOrElse(sys.error("Endpoint.info.name is required for Sangria Field"))
-      val args = inputToArgs(endpoint.input)
-      Field(nonEmptyName, outType, description, args, resolve)
+      val arg = inputToArgs(endpoint.input).headOption
+        .getOrElse(sys.error("This implementation supports only 1 arg"))
+        .asInstanceOf[Argument[I]]
+      Field(nonEmptyName, outType, description, List(arg), resolve(arg, _))
     }
+
 
     def schemaToSInputType[T: ClassTag](schema: Schema[T]): InputType[T] = {
       val tName = implicitly[ClassTag[T]].getClass.getSimpleName
