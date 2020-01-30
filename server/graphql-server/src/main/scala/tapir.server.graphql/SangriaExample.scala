@@ -4,39 +4,21 @@ import Endpoints._
 import sangria.schema.{fields, ListType, ObjectType, OutputType, Schema, ValidOutType, Value}
 import scala.concurrent.{Await, Future}
 
-object SangriaExample
-
 case class Country(name: String)
 case class Author(name: String, country: Country)
 case class Genre(name: String, description: String)
 case class Book(title: String, genre: Genre, year: Int, author: Author)
 case class BooksQuery(genre: Option[String], limit: Limit)
 
-class BooksRepo {}
-
-/**
-  * Descriptions of endpoints used in the example.
-  */
 object Endpoints {
   import io.circe.generic.auto._
   import sttp.tapir._
   import sttp.tapir.json.circe._
 
   type Limit = Option[Int]
-  type AuthToken = String
 
   // All endpoints report errors as strings, and have the common path prefix '/books'
   private val baseEndpoint = endpoint.errorOut(stringBody).in("books")
-
-  // The path for this endpoint will be '/books/add', as we are using the base endpoint
-  val addBook: Endpoint[(Book, AuthToken), String, Unit, Nothing] = baseEndpoint.post
-    .in("add")
-    .in(
-      jsonBody[Book]
-        .description("The book to add")
-        .example(Book("Pride and Prejudice", Genre("Novel", ""), 1813, Author("Jane Austen", Country("United Kingdom"))))
-    )
-    .in(header[String]("X-Auth-Token").description("The token is 'secret'"))
 
   // Re-usable parameter description
   private val limitParameter = query[Int]("limit").description("Maximum number of books to retrieve")
@@ -46,25 +28,15 @@ object Endpoints {
     .in(limitParameter)
     .out(jsonBody[Seq[Book]])
     .info(EndpointInfo(Some("BooksListing"), None, None, Vector.empty))
-
-  /*val booksListingByGenre: Endpoint[BooksQuery, String, Vector[Book], Nothing] = baseEndpoint.get
-    .in(("list" / path[String]("genre").map(Some(_))(_.get)).and(limitParameter).mapTo(BooksQuery))
-    .out(jsonBody[Vector[Book]])*/
 }
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json._
 
-object BooksExample extends App with SprayJsonSupport with DefaultJsonProtocol {
-  import EndpointToSangria.RichSangriaEndpoint
+object SangriaExample extends App with SprayJsonSupport with DefaultJsonProtocol {
+  import EndpointToSangria.RichSangriaEndpoint1
   import Endpoints._
   import sangria.macros.derive._
-  import akka.http.scaladsl.server.Route
-
-  implicit val countryFmt = jsonFormat1(Country.apply)
-  implicit val authorFmt = jsonFormat2(Author.apply)
-  implicit val genreFmt = jsonFormat2(Genre.apply)
-  implicit val bookFmt = jsonFormat4(Book.apply)
 
   implicit val countryType = deriveObjectType[Unit, Country](ObjectTypeDescription("The country"))
   implicit val authorType = deriveObjectType[Unit, Author](ObjectTypeDescription("The author"))
@@ -72,19 +44,24 @@ object BooksExample extends App with SprayJsonSupport with DefaultJsonProtocol {
   implicit val bookType: ObjectType[Unit, Book] = deriveObjectType[Unit, Book](ObjectTypeDescription("The book"))
   implicit val booksType: ListType[Book] = ListType(bookType)
 
-  // implicit val outType: OutputType[Vector[Book]] = ???
-  // implicit val validOut: ValidOutType[Int, Seq[Book]] = ???
-  // implicit val fromInput: FromInput[Int] = FromInput.defaultInput[Int]
-
-  val books = booksListing.toSangriaField[Library, Any] { case (arg, ctx) =>
+  // Concept of endpoints to ObjectTypes transformation - via the Sangria.Field ...
+  // Sangria.Field is similar to the endpoint: input (args) + output (resolve method on context and that strange Val)
+  val lsitBooks = booksListing.toSangriaField[Library, Any] { case (arg, ctx) =>
     Value[Library, Seq[Book]](ctx.ctx.getBooks(ctx.arg(arg)))
   }
 
-  val query = ObjectType("Query", fields[Library, Any](books))
+  // ... ObjectType is top abstraction in sangria responsible for providing graph-unit, in this case it's a query unit;
+  //     So that way we group endpoints around shared resources, for example, Library-related endpoints:
+  val queryType = ObjectType("Query", fields[Library, Any](
+    lsitBooks
+    // TODO getBook, addBook, deleteBook
+  ))
 
-  val schema = Schema(query)
+  val schema = Schema(queryType)
 
+  println("----- Schema START -----")
   println(schema.renderPretty)
+  println("----- Schema END -----")
 
   import sangria.macros._
   import sangria.execution._
@@ -93,7 +70,7 @@ object BooksExample extends App with SprayJsonSupport with DefaultJsonProtocol {
   import scala.concurrent.ExecutionContext.Implicits.global
   import scala.concurrent.duration._
 
-  val q =
+  val gqlQuery =
   graphql"""
     query MyBooks {
       BooksListing(limit: 2) {
@@ -103,14 +80,16 @@ object BooksExample extends App with SprayJsonSupport with DefaultJsonProtocol {
     }
   """
 
-  // .. on future - find out how to use Val
-  val future: Future[Json] = Executor.execute(schema, q, new Library, root = ())
+  // TODO For now I don't understand what is root and how that Val type param of Sagria.Schema could be
+  //      used (which is related to root somehow)
+  val future: Future[Json] = Executor.execute(schema, gqlQuery, new Library, root = ())
   val result = Await.result(future, 10.seconds)
 
-  println("")
-  println("-----------")
-  println("")
+  println()
+  println()
+  println("----- Query res START -----")
   println(result)
+  println("----- Query res End -----")
 
 }
 
@@ -135,19 +114,6 @@ class Library {
 
   def getAllBooks: Seq[Book] = Books.get()
 
-  def getBooks(limit: Int) =
-    getAllBooks.take(limit)
+  def getBooks(limit: Int) = getAllBooks.take(limit)
 
-  /*def getBooks(query: BooksQuery): Seq[Book] = {
-    val allBooks = Books.get()
-    val limitedBooks = query.limit match {
-      case None    => allBooks
-      case Some(l) => allBooks.take(l)
-    }
-    val filteredBooks = query.genre match {
-      case None    => limitedBooks
-      case Some(g) => limitedBooks.filter(_.genre.name.equalsIgnoreCase(g))
-    }
-    filteredBooks
-  }*/
 }

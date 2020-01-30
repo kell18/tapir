@@ -9,26 +9,19 @@ import sttp.tapir.SchemaType.{SInteger, SObjectInfo, SProduct, SString}
 import scala.reflect.ClassTag
 
 object EndpointToSangria {
-  type Resolver[Ctx, Val] = Context[Ctx, Val] ⇒ Action[Ctx, _]
 
-  implicit class RichSangriaEndpoint[I, E, O](endpoint: Endpoint[I, E, O, _])(implicit iClassTag: ClassTag[I]) {
-    /*def toSangriaQuery[Ctx](resolver: Resolver[Ctx, Any])(name: String)(
-      implicit outType: ObjectType[Ctx, O]
-    ): ObjectType[Ctx, _] = {
-      val queryField = inputsToQueryField(name)(endpoint, resolver)
-      ObjectType(name, fields[Ctx, Any](queryField))
-    }*/
+  implicit class RichSangriaEndpoint1[I, E, O](endpoint: Endpoint[I, E, O, _])(implicit iClassTag: ClassTag[I]) {
 
-    // Query.Field is something like one endpoint - args + resolve method
     def toSangriaField[Ctx, Val](resolve: (Argument[I], Context[Ctx, Val]) => Action[Ctx, O])(
         implicit outType: OutputType[O]
     ): Field[Ctx, Val] = {
       def inputToArgs(input: EndpointInput[_]): List[Argument[_]] = {
         input match {
-          case p @ EndpointInput.PathCapture(codec, name, info) =>
+          case p @ EndpointInput.PathCapture(codec, nameOpt, info) =>
+            val name = nameOpt.getOrElse(sys.error("name is required for PathCapture for Sangria generation"))
             Argument(
-              name = name.getOrElse(p.show),
-              argumentType = schemaToSInputType(codec.meta.schema),
+              name = name,
+              argumentType = schemaToSInputType(codec.meta.schema, name),
               description = info.description,
               defaultValue = None,
               fromInput = FromInput.defaultInput[Any],
@@ -38,7 +31,7 @@ object EndpointToSangria {
           case q @ EndpointInput.Query(name, codec, info) =>
             Argument(
               name = name,
-              argumentType = schemaToSInputType(codec.meta.schema),
+              argumentType = schemaToSInputType(codec.meta.schema, name),
               description = info.description,
               defaultValue = None,
               fromInput = FromInput.defaultInput[Any],
@@ -48,7 +41,7 @@ object EndpointToSangria {
           case EndpointInput.Cookie(name, codec, info) =>
             Argument(
               name = name,
-              argumentType = schemaToSInputType(codec.meta.schema),
+              argumentType = schemaToSInputType(codec.meta.schema, name),
               description = info.description,
               defaultValue = None,
               fromInput = FromInput.defaultInput[Any],
@@ -70,29 +63,22 @@ object EndpointToSangria {
         }
       }
 
-      /*def ioToArgs(io: EndpointIO[I]): List[Argument[_]] = {
-        io match {
-          case EndpointIO.Body(codec, info) =>
-            Argument(iClassTag.getClass.getSimpleName, schemaToSInputType(codec.meta.schema), info.description.getOrElse("Endpoint body")) :: Nil
-          case _ => ??? // ..
-        }
-      }*/
-
+      // TODO make use of more endpoint docs
       val EndpointInfo(fName, summary, description, tags) = endpoint.info
       val nonEmptyName = fName.getOrElse(sys.error("Endpoint.info.name is required for Sangria Field"))
-      val arg = inputToArgs(endpoint.input).headOption
-        .getOrElse(sys.error("This implementation supports only 1 arg"))
-        .asInstanceOf[Argument[I]]
+      val arg = inputToArgs(endpoint.input) match {
+        case singleArg :: Nil => singleArg.asInstanceOf[Argument[I]]
+        case notSingleArg => sys.error(s"This EndpointToSangria implementation supports exactly 1 arg, got: $notSingleArg")
+      }
       Field(nonEmptyName, outType, description, List(arg), resolve(arg, _))
     }
 
 
-    def schemaToSInputType[T: ClassTag](schema: Schema[T]): InputType[T] = {
-      val tName = implicitly[ClassTag[T]].getClass.getSimpleName
+    def schemaToSInputType[T](schema: Schema[T], argName: String): InputType[T] = {
       (schema match {
         case Schema(SString, _, description, _) =>
           ScalarType[String](
-            tName,
+            argName,
             description,
             coerceUserInput = { any =>
               Right(any.toString)
@@ -105,7 +91,7 @@ object EndpointToSangria {
           ).asInstanceOf[ScalarType[T]]
         case Schema(SInteger, _, description, _) =>
           ScalarType[Int](
-            tName,
+            argName,
             description,
             coerceUserInput = {
               case i: Int ⇒ Right(i)
@@ -125,11 +111,12 @@ object EndpointToSangria {
             coerceOutput = valueOutput
           )
         case Schema(SProduct(SObjectInfo(fullName, tParamsNames), fieldsS), isOptional, description, format) =>
-          val fieldsInpTypes = fieldsS.map { case (name, fSchema) => name -> schemaToSInputType(fSchema) }
+          val fieldsInpTypes = fieldsS.map { case (fName, fSchema) =>
+            fName -> schemaToSInputType(fSchema, s"$argName.$fName") }
           // TODO provide at least descriptions and maybe defaultValues
           val inputFields = fieldsInpTypes.map { case (name, iType) => InputField(name, iType, "") }.toList
           InputObjectType(
-            tName,
+            argName,
             description,
             () => inputFields,
             Vector.empty,
@@ -139,8 +126,6 @@ object EndpointToSangria {
         case unknown => sys.error(s"$unknown input schema match is not implemented")
       }).asInstanceOf[ScalarType[T]]
     }
-
-    // def schemaToSInputField(schema: Schema[_]):
 
     def valueOutput[T](value: T, capabilities: Set[MarshallerCapability]): T = value
   }
