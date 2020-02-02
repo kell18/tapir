@@ -16,7 +16,7 @@ object EndpointToSangria {
     def toSangriaField[Ctx, Val](resolve: (Argument[I], Context[Ctx, Val]) => Action[Ctx, O])(
         implicit outType: OutputType[O]
     ): Field[Ctx, Val] = {
-      val EndpointInfo(fName, summary, description, tags) = endpoint.info
+      val EndpointInfo(fName, summary, description, tags, deprecated) = endpoint.info
       val nonEmptyName = fName.getOrElse(sys.error("Endpoint.info.name is required for Sangria Field"))
       val arg = inputToArgs(endpoint.input) match {
         case singleArg :: Nil => singleArg.asInstanceOf[Argument[I]]
@@ -69,7 +69,7 @@ object EndpointToSangria {
 
     def schemaToSInputType[T](schema: Schema[T], argName: String): InputType[T] = {
       schema match {
-        case Schema(SString, _, description, _) =>
+        case Schema(SString, _, description, _, _) =>
           ScalarType[String](
             argName,
             description,
@@ -82,7 +82,7 @@ object EndpointToSangria {
             // TODO make sure it's correct
             coerceOutput = { case (t, _) => t.toString }
           ).asInstanceOf[ScalarType[T]]
-        case Schema(SInteger, _, description, _) =>
+        case Schema(SInteger, _, description, _, _) =>
           ScalarType[Int](
             argName,
             description,
@@ -103,7 +103,7 @@ object EndpointToSangria {
             },
             coerceOutput = (value: Int, _: Set[MarshallerCapability]) => value
           ).asInstanceOf[ScalarType[T]]
-        case Schema(SProduct(SObjectInfo(fullName, tParamsNames), fieldsS), isOptional, description, format) =>
+        case Schema(SProduct(SObjectInfo(fullName, tParamsNames), fieldsS), isOptional, description, format, _) =>
           val fieldsInpTypes = fieldsS.map {
             case (fName, fSchema) =>
               val name = s"$argName.$fName"

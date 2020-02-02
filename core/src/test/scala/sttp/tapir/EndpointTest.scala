@@ -4,7 +4,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import sttp.tapir.util.CompileUtil
 
 class EndpointTest extends FlatSpec with Matchers {
-  it should "compile inputs" in {
+  "endpoint" should "compile inputs" in {
     endpoint.in(query[String]("q1")): Endpoint[String, Unit, Unit, Nothing]
     endpoint.in(query[String]("q1").and(query[Int]("q2"))): Endpoint[(String, Int), Unit, Unit, Nothing]
 

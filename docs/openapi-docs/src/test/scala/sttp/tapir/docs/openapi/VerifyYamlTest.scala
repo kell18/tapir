@@ -1,6 +1,7 @@
 package sttp.tapir.docs.openapi
 
 import com.github.ghik.silencer.silent
+import io.circe.Json
 import io.circe.generic.auto._
 import org.scalatest.{FunSuite, Matchers}
 import sttp.model.{Method, StatusCode}
@@ -12,7 +13,7 @@ import sttp.tapir.generic.Derived
 import sttp.tapir.json.circe._
 import sttp.tapir.openapi.circe.yaml._
 import sttp.tapir.openapi.{Contact, Info, License}
-import sttp.tapir.tests.{FruitAmount, _}
+import sttp.tapir.tests.{Person => TestPerson, FruitAmount, _}
 
 import scala.io.Source
 
@@ -187,14 +188,13 @@ class VerifyYamlTest extends FunSuite with Matchers {
 
     implicit val openApiDocsOptions: OpenAPIDocsOptions = OpenAPIDocsOptions.default.copy(linkFromChildToParent = false)
     val actualYaml = endpoint_wit_sealed_trait.toOpenAPI(Info("Fruits", "1.0")).toYaml
-    println(actualYaml)
     val actualYamlNoIndent = noIndentation(actualYaml)
 
     actualYamlNoIndent shouldBe expectedYaml
   }
 
   test("should match the expected yaml when using coproduct types with discriminator") {
-    val sPerson = implicitly[Schema[Person]]
+    val sPerson = implicitly[Schema[TestPerson]]
     val sOrganization = implicitly[Schema[Organization]]
     implicit val sEntity: Schema[Entity] = Schema.oneOf[Entity, String](_.name, _.toString)("john" -> sPerson, "sml" -> sOrganization)
 
@@ -220,7 +220,7 @@ class VerifyYamlTest extends FunSuite with Matchers {
   }
 
   test("should match the expected yaml when using nested coproduct types with discriminator") {
-    val sPerson = implicitly[Schema[Person]]
+    val sPerson = implicitly[Schema[TestPerson]]
     val sOrganization = implicitly[Schema[Organization]]
     @silent("never used") // it is used
     implicit val sEntity: Schema[Entity] = Schema.oneOf[Entity, String](_.name, _.toString)("john" -> sPerson, "sml" -> sOrganization)
@@ -390,7 +390,7 @@ class VerifyYamlTest extends FunSuite with Matchers {
     val expectedYaml = loadYaml("expected_additional_properties.yml")
 
     val actualYaml = endpoint
-      .out(jsonBody[Map[String, Person]])
+      .out(jsonBody[Map[String, TestPerson]])
       .toOpenAPI(Info("Entities", "1.0"))
       .toYaml
     val actualYamlNoIndent = noIndentation(actualYaml)
@@ -471,7 +471,18 @@ class VerifyYamlTest extends FunSuite with Matchers {
   test("validator with wrapper type in body") {
     val expectedYaml = loadYaml("expected_valid_body_wrapped.yml")
 
-    val actualYaml = Validation.in_json_wrapper
+    val actualYaml = Validation.in_valid_json
+      .in("add")
+      .in("path")
+      .toOpenAPI(Info("Fruits", "1.0"))
+      .toYaml
+    noIndentation(actualYaml) shouldBe expectedYaml
+  }
+
+  test("validator with optional wrapper type in body") {
+    val expectedYaml = loadYaml("expected_valid_optional_body_wrapped.yml")
+
+    val actualYaml = Validation.in_valid_optional_json
       .in("add")
       .in("path")
       .toOpenAPI(Info("Fruits", "1.0"))
@@ -494,7 +505,7 @@ class VerifyYamlTest extends FunSuite with Matchers {
   test("validator with wrappers type in query") {
     val expectedYaml = loadYaml("expected_valid_query_wrapped.yml")
 
-    val actualYaml = Validation.in_query_wrapper
+    val actualYaml = Validation.in_valid_query
       .in("add")
       .in("path")
       .toOpenAPI(Info("Fruits", "1.0"))
@@ -505,7 +516,7 @@ class VerifyYamlTest extends FunSuite with Matchers {
   test("validator with list") {
     val expectedYaml = loadYaml("expected_valid_body_collection.yml")
 
-    val actualYaml = Validation.in_json_collection
+    val actualYaml = Validation.in_valid_json_collection
       .in("add")
       .in("path")
       .toOpenAPI(Info("Fruits", "1.0"))
@@ -516,7 +527,7 @@ class VerifyYamlTest extends FunSuite with Matchers {
   test("render validator for additional properties of map") {
     val expectedYaml = loadYaml("expected_valid_additional_properties.yml")
 
-    val actualYaml = Validation.in_map
+    val actualYaml = Validation.in_valid_map
       .toOpenAPI(Info("Entities", "1.0"))
       .toYaml
     val actualYamlNoIndent = noIndentation(actualYaml)
@@ -576,6 +587,76 @@ class VerifyYamlTest extends FunSuite with Matchers {
     actualYamlNoIndent shouldBe expectedYaml
   }
 
+  test("support recursive coproducts") {
+    val expectedYaml = loadYaml("expected_recursive_coproducts.yml")
+    val actualYaml = endpoint.post
+      .in(jsonBody[Clause])
+      .toOpenAPI(Info("Entities", "1.0"))
+      .toYaml
+
+    val actualYamlNoIndent = noIndentation(actualYaml)
+    actualYamlNoIndent shouldBe expectedYaml
+  }
+
+  test("render field validator when used inside of coproduct") {
+    implicit val ageValidator: Validator[Int] = Validator.min(11)
+    val expectedYaml = loadYaml("expected_valid_coproduct.yml")
+    val actualYaml = endpoint.get
+      .out(jsonBody[Entity])
+      .toOpenAPI(Info("Entities", "1.0"))
+      .toYaml
+
+    val actualYamlNoIndent = noIndentation(actualYaml)
+    actualYamlNoIndent shouldBe expectedYaml
+  }
+
+  test("render field validator when used inside of optional coproduct") {
+    implicit val ageValidator: Validator[Int] = Validator.min(11)
+    val expectedYaml = loadYaml("expected_valid_optional_coproduct.yml")
+    val actualYaml = endpoint.get
+      .in(jsonBody[Option[Entity]])
+      .toOpenAPI(Info("Entities", "1.0"))
+      .toYaml
+
+    val actualYamlNoIndent = noIndentation(actualYaml)
+    actualYamlNoIndent shouldBe expectedYaml
+  }
+
+  test("arbitrary json output") {
+    val expectedYaml = loadYaml("expected_arbitrary_json_output.yml")
+    val actualYaml = endpoint
+      .out(jsonBody[Json])
+      .toOpenAPI(Info("Entities", "1.0"))
+      .toYaml
+
+    val actualYamlNoIndent = noIndentation(actualYaml)
+    actualYamlNoIndent shouldBe expectedYaml
+  }
+
+  test("deprecated endpoint") {
+    val expectedYaml = loadYaml("expected_deprecated.yml")
+    val actualYaml = endpoint
+      .in("api")
+      .deprecated()
+      .toOpenAPI(Info("Entities", "1.0"))
+      .toYaml
+
+    val actualYamlNoIndent = noIndentation(actualYaml)
+    actualYamlNoIndent shouldBe expectedYaml
+  }
+
+  test("should not set format for array types ") {
+    val expectedYaml = loadYaml("expected_array_no_format.yml")
+    val actualYaml = endpoint
+      .in(query[List[String]]("foo"))
+      .in(query[List[Long]]("bar"))
+      .toOpenAPI(Info("Entities", "1.0"))
+      .toYaml
+
+    val actualYamlNoIndent = noIndentation(actualYaml)
+    actualYamlNoIndent shouldBe expectedYaml
+  }
+
   private def loadYaml(fileName: String): String = {
     noIndentation(Source.fromInputStream(getClass.getResourceAsStream(s"/$fileName")).getLines().mkString("\n"))
   }
@@ -588,12 +669,6 @@ case class G[T](data: T)
 
 case class NestedEntity(entity: Entity)
 
-sealed trait Entity {
-  def name: String
-}
-case class Person(name: String, age: Int) extends Entity
-case class Organization(name: String) extends Entity
-
 sealed trait ErrorInfo
 case class NotFound(what: String) extends ErrorInfo
 case class Unauthorized(realm: String) extends ErrorInfo
@@ -605,3 +680,7 @@ sealed trait GenericEntity[T]
 case class GenericPerson[T](data: T) extends GenericEntity[T]
 
 case class ObjectWithList(data: List[FruitAmount])
+
+sealed trait Clause
+case class Expression(v: String) extends Clause
+case class Not(not: Clause) extends Clause

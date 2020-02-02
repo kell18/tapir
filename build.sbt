@@ -27,7 +27,7 @@ val commonSettings = commonSmlBuildSettings ++ ossPublishSettings ++ Seq(
 def dependenciesFor(version: String)(deps: (Option[(Long, Long)] => ModuleID)*): Seq[ModuleID] =
   deps.map(_.apply(CrossVersion.partialVersion(version)))
 
-val scalaTest = "org.scalatest" %% "scalatest" % "3.0.8"
+val scalaTest = "org.scalatest" %% "scalatest" % Versions.scalaTest
 
 lazy val loggerDependencies = Seq(
   "ch.qos.logback" % "logback-classic" % "1.2.3",
@@ -71,8 +71,8 @@ lazy val core: Project = (project in file("core"))
   .settings(
     name := "tapir-core",
     libraryDependencies ++= Seq(
-      "com.propensive" %% "magnolia" % "0.12.3",
-      "com.softwaremill.sttp.client" %% "model" % Versions.sttp,
+      "com.propensive" %% "magnolia" % "0.12.6",
+      "com.softwaremill.sttp.model" %% "core" % "1.0.0-RC7",
       scalaTest % "test"
     ),
     unmanagedSourceDirectories in Compile += {
@@ -105,7 +105,8 @@ lazy val tapirCats: Project = (project in file("cats"))
   .settings(
     name := "tapir-cats",
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-core" % Versions.cats,
+      "org.typelevel" %% "cats-core" % "2.1.0",
+      "org.scalacheck" %% "scalacheck" % Versions.scalaCheck % "test",
       scalaTest % "test"
     )
   )
@@ -299,7 +300,7 @@ lazy val finatraServer: Project = (project in file("server/finatra-server"))
     name := "tapir-finatra-server",
     libraryDependencies ++= Seq(
       "com.twitter" %% "finatra-http" % Versions.finatra,
-      "org.apache.httpcomponents" % "httpmime" % "4.5.10",
+      "org.apache.httpcomponents" % "httpmime" % "4.5.11",
       // Testing
       "com.twitter" %% "finatra-http" % Versions.finatra % "test",
       "com.twitter" %% "inject-server" % Versions.finatra % "test",
@@ -322,9 +323,9 @@ lazy val finatraServerCats: Project =
     .settings(
       name := "tapir-finatra-server-cats",
       libraryDependencies ++= Seq(
-        "org.typelevel" %% "cats-effect" % Versions.cats,
-        "io.catbird" %% "catbird-finagle" % Versions.finatra,
-        "io.catbird" %% "catbird-effect" % Versions.finatra
+        "org.typelevel" %% "cats-effect" % Versions.catsEffect,
+        "io.catbird" %% "catbird-finagle" % Versions.catbird,
+        "io.catbird" %% "catbird-effect" % Versions.catbird
       )
     )
     .settings(only2_12settings)
@@ -364,7 +365,7 @@ lazy val examples: Project = (project in file("examples"))
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio" % "1.0.0-RC17",
       "dev.zio" %% "zio-interop-cats" % "2.0.0.0-RC10",
-      "org.typelevel" %% "cats-effect" % "2.0.0",
+      "org.typelevel" %% "cats-effect" % Versions.catsEffect,
       "org.http4s" %% "http4s-dsl" % Versions.http4s
     ),
     libraryDependencies ++= loggerDependencies,
@@ -381,12 +382,12 @@ lazy val playground: Project = (project in file("playground"))
       "com.softwaremill.sttp.client" %% "akka-http-backend" % Versions.sttp,
       "dev.zio" %% "zio" % "1.0.0-RC17",
       "dev.zio" %% "zio-interop-cats" % "2.0.0.0-RC10",
-      "org.typelevel" %% "cats-effect" % "2.0.0",
+      "org.typelevel" %% "cats-effect" % Versions.catsEffect,
       "io.swagger" % "swagger-annotations" % "1.6.0",
-      "com.softwaremill.sttp.client" %% "akka-http-backend" % Versions.sttp,
-
-      "org.sangria-graphql" %% "sangria" % "1.4.2",
-      "org.sangria-graphql" %% "sangria-circe" % "1.2.1"
+      "io.circe" %% "circe-generic-extras" % "0.12.2"
+    ),
+    libraryDependencies ++= Seq(
+      "com.softwaremill.sttp.client" %% "akka-http-backend" % Versions.sttp
     ),
     libraryDependencies ++= loggerDependencies,
     publishArtifact := false

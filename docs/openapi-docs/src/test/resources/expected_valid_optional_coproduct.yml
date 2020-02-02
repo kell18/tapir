@@ -1,18 +1,20 @@
 openapi: 3.0.1
 info:
-  title: Fruits
+  title: Entities
   version: '1.0'
 paths:
   /:
     get:
       operationId: getRoot
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Entity'
+        required: false
       responses:
         '200':
           description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Entity'
 components:
   schemas:
     Entity:
@@ -28,11 +30,12 @@ components:
           type: string
     Person:
       required:
-      - name
-      - age
+        - name
+        - age
       type: object
       properties:
         name:
           type: string
         age:
           type: integer
+          minimum: 11

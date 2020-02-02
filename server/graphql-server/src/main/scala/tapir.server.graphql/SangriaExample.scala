@@ -27,7 +27,7 @@ object Endpoints {
     .in("list" / "all")
     .in(limitParameter)
     .out(jsonBody[Seq[Book]])
-    .info(EndpointInfo(Some("BooksListing"), None, None, Vector.empty))
+    .info(EndpointInfo(Some("BooksListing"), None, None, Vector.empty, deprecated = false))
 }
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
