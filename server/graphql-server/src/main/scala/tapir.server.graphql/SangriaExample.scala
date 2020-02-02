@@ -34,7 +34,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json._
 
 object SangriaExample extends App with SprayJsonSupport with DefaultJsonProtocol {
-  import EndpointToSangria.RichSangriaEndpoint1
+  import EndpointToSangria.RichSangriaEndpoint
   import Endpoints._
   import sangria.macros.derive._
 
@@ -87,9 +87,8 @@ object SangriaExample extends App with SprayJsonSupport with DefaultJsonProtocol
 
   println()
   println()
-  println("----- Query res START -----")
+  println("----- Query results -----")
   println(result)
-  println("----- Query res End -----")
 
 }
 
