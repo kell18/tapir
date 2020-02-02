@@ -76,6 +76,9 @@ object SangriaExample extends App with SprayJsonSupport with DefaultJsonProtocol
       BooksListing(limit: 2) {
         title
         year
+        genre {
+          name
+        }
       }
     }
   """
