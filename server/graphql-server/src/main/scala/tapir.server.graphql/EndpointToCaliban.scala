@@ -2,9 +2,11 @@ package tapir.server.graphql
 
 import akka.http.scaladsl.server.Route
 import caliban.{CalibanError, GraphQL}
+import caliban.introspection.adt.__Field
 import caliban.schema.GenericSchema
 import sangria.schema.{Action, Context}
-import sttp.tapir.{endpoint, jsonBody, query, stringBody, Endpoint}
+import sttp.tapir.{endpoint, jsonBody, query, stringBody, Endpoint, EndpointInput, Schema => TSchema}
+import sttp.tapir.SchemaType._
 import zio.URIO
 import scala.concurrent.Future
 import scala.reflect.ClassTag
@@ -19,10 +21,11 @@ object Resolvable {
 }
 
 
-object EndpointToGraphQl extends App with GenericSchema[Any] {
+object EndpointToCaliban extends App with GenericSchema[Any] {
   import caliban.GraphQL.graphQL
   import caliban.RootResolver
   import caliban.schema._
+  import caliban.schema.Types._
   import caliban.GraphQL._
 
   import caliban.GraphQL._
@@ -34,11 +37,43 @@ object EndpointToGraphQl extends App with GenericSchema[Any] {
   // import sttp.tapir._
   import sttp.tapir.json.circe._
 
+  implicit class EndpointToCalibanSchema[I, E, O](endp: Endpoint[I, E, O, _]) extends GenericSchema[Any] {
+    def toInputSchema(): Schema[Any, I] = {
+      tInputToSchema(endp.input) match {
+        case singleArg :: Nil => singleArg.asInstanceOf[Schema[Any, I]]
+        case notSingleArg     => sys.error(s"This implementation supports exactly 1 arg, got: $notSingleArg")
+      }
+    }
 
-  case class Character(name: String)
+    def tInputToSchema[I1](endpointInput: EndpointInput[I1]): List[Schema[Any, _]] = endp.input match {
+        case q @ EndpointInput.Query(name, codec, info) => tScemaToCScema(name, codec.meta.schema) :: Nil
+        case q @ EndpointInput.Multiple(inputs) =>
+          inputs.flatMap(x => tInputToSchema(x.asInstanceOf[EndpointInput[_]])).toList
+        case _ => ???
+      }
+
+    def tScemaToCScema(argName: String, tSchema: TSchema[_]): Schema[Any, _] = tSchema match {
+        // TODO Use description and mb others
+      case TSchema(SString, isOpt, description, _, _) => stringSchema.setIsOptional(isOpt)
+      case TSchema(SInteger, isOpt, description, _, _) => intSchema.setIsOptional(isOpt)
+      case TSchema(SProduct(info, fields), isOpt, description, _, _) =>
+        val fieldsS: List[(__Field, _ => Step[Any])] = ???
+        objectSchema(argName, None, fieldsS)
+      case _ => ???
+    }
+
+    // def
+  }
+
+  implicit class CSchemaOps[R, T](schema: Schema[R, T]) extends GenericSchema[R] {
+    def setIsOptional(b: Boolean): Schema[R, _] =
+      if (b) optionSchema(schema) else schema
 
 
-  case class CharactersArgs(origin: Option[String])
+  }
+
+
+  /*case class CharactersArgs(origin: Option[String])
   case class CharacterArgs(name: String)
 
   // schema
@@ -113,5 +148,5 @@ object EndpointToGraphQl extends App with GenericSchema[Any] {
 
   // Open questions:
   // 1. multi-arg endpoints
-
+*/
 }
