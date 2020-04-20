@@ -1,6 +1,6 @@
 package tapir.server.graphql
 
-import zio.DefaultRuntime
+
 import zio.console._
 
 object CalobanProblems extends App {
@@ -28,7 +28,9 @@ object CalobanProblems extends App {
   println()
   println()
 
-  val runtime = new DefaultRuntime {}
+  // .. fix DefaultRuntime (import not found)
+
+  /*val runtime = new DefaultRuntime {}
   val r = gq.execute(
     """
       |{
@@ -38,5 +40,5 @@ object CalobanProblems extends App {
       |}
       |""".stripMargin).map(println)
 
-  runtime.unsafeRun(r)
+  runtime.unsafeRun(r)*/
 }

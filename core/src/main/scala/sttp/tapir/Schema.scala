@@ -32,11 +32,16 @@ case class Schema[T](
   def asOptional[U]: Schema[U] = copy(isOptional = true)
 
   /**
+    * Returns a required version of this schema, with `isOptional` set to false.
+    */
+  def asRequired[U]: Schema[U] = copy(isOptional = false)
+
+  /**
     * Returns a collection version of this schema, with the schema type wrapped in [[SArray]].
     * Also, sets `isOptional` to true as the collection might be empty.
     * Also, sets 'format' to None. Formats are only applicable to the array elements, not to the array as a whole.
     */
-  def asArrayElement[U]: Schema[U] = copy(isOptional = true, schemaType = SArray(this), format=None)
+  def asArrayElement[U]: Schema[U] = copy(isOptional = true, schemaType = SArray(this), format = None)
 
   def description(d: String): Schema[T] = copy(description = Some(d))
 
@@ -45,6 +50,8 @@ case class Schema[T](
   def deprecated(d: Boolean): Schema[T] = copy(deprecated = d)
 
   def show: String = s"schema is $schemaType${if (isOptional) " (optional)" else ""}"
+
+  def setDescription[U](path: T => U, description: String): Schema[T] = macro ModifySchemaMacro.setDescriptionMacro[T, U]
 
   def modifyUnsafe[U](fields: String*)(modify: Schema[U] => Schema[U]): Schema[T] = modifyAtPath(fields.toList, modify)
 
@@ -80,6 +87,7 @@ object Schema extends SchemaMagnoliaDerivation with LowPrioritySchema {
   implicit val schemaForFloat: Schema[Float] = Schema(SNumber).format("float")
   implicit val schemaForDouble: Schema[Double] = Schema(SNumber).format("double")
   implicit val schemaForBoolean: Schema[Boolean] = Schema(SBoolean)
+  implicit val schemaForUnit: Schema[Unit] = Schema(SProduct.Empty)
   implicit val schemaForFile: Schema[File] = Schema(SBinary)
   implicit val schemaForPath: Schema[Path] = Schema(SBinary)
   implicit val schemaForByteArray: Schema[Array[Byte]] = Schema(SBinary)
@@ -93,6 +101,8 @@ object Schema extends SchemaMagnoliaDerivation with LowPrioritySchema {
   implicit val schemaForLocalDate: Schema[LocalDate] = Schema(SDate)
   implicit val schemaForZoneOffset: Schema[ZoneOffset] = Schema(SString)
   implicit val schemaForJavaDuration: Schema[Duration] = Schema(SString)
+  implicit val schemaForLocalTime: Schema[LocalTime] = Schema(SString)
+  implicit val schemaForOffsetTime: Schema[OffsetTime] = Schema(SString)
   implicit val schemaForScalaDuration: Schema[scala.concurrent.duration.Duration] = Schema(SString)
   implicit val schemaForUUID: Schema[UUID] = Schema(SString)
   implicit val schemaForBigDecimal: Schema[BigDecimal] = Schema(SString)

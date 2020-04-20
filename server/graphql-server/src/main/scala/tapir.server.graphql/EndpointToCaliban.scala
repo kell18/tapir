@@ -5,7 +5,7 @@ import caliban.{CalibanError, GraphQL}
 import caliban.introspection.adt.__Field
 import caliban.schema.GenericSchema
 import sangria.schema.{Action, Context}
-import sttp.tapir.{endpoint, jsonBody, query, stringBody, Endpoint, EndpointInput, Schema => TSchema}
+import sttp.tapir.{endpoint, query, stringBody, Endpoint, EndpointInput, Schema => TSchema}
 import sttp.tapir.SchemaType._
 import zio.URIO
 import scala.concurrent.Future
@@ -46,8 +46,8 @@ object EndpointToCaliban extends App with GenericSchema[Any] {
     }
 
     def tInputToSchema[I1](endpointInput: EndpointInput[I1]): List[Schema[Any, _]] = endp.input match {
-        case q @ EndpointInput.Query(name, codec, info) => tScemaToCScema(name, codec.meta.schema) :: Nil
-        case q @ EndpointInput.Multiple(inputs) =>
+        case q @ EndpointInput.Query(name, codec, info) => tScemaToCScema(name, codec.schema.get) :: Nil
+        case q @ EndpointInput.Multiple(inputs, _, _) =>
           inputs.flatMap(x => tInputToSchema(x.asInstanceOf[EndpointInput[_]])).toList
         case _ => ???
       }
@@ -58,7 +58,9 @@ object EndpointToCaliban extends App with GenericSchema[Any] {
       case TSchema(SInteger, isOpt, description, _, _) => intSchema.setIsOptional(isOpt)
       case TSchema(SProduct(info, fields), isOpt, description, _, _) =>
         val fieldsS: List[(__Field, _ => Step[Any])] = ???
-        objectSchema(argName, None, fieldsS)
+        // .. type params compile error
+        // objectSchema(argName, None, fieldsS)
+        ???
       case _ => ???
     }
 

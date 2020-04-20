@@ -1,4 +1,4 @@
-val scala2_12 = "2.12.10"
+val scala2_12 = "2.12.11"
 val scala2_13 = "2.13.1"
 
 lazy val is2_12 = settingKey[Boolean]("Is the scala version 2.12.")
@@ -9,7 +9,8 @@ val only2_12settings = Seq(
   publishArtifact := is2_12.value,
   skip := !is2_12.value,
   skip in publish := !is2_12.value,
-  libraryDependencies := (if (is2_12.value) libraryDependencies.value else Nil)
+  libraryDependencies := (if (is2_12.value) libraryDependencies.value else Nil),
+  mimaPreviousArtifacts := (if (is2_12.value) mimaPreviousArtifacts.value else Set.empty)
 )
 
 val commonSettings = commonSmlBuildSettings ++ ossPublishSettings ++ Seq(
@@ -21,13 +22,15 @@ val commonSettings = commonSmlBuildSettings ++ ossPublishSettings ++ Seq(
     compilerPlugin("com.softwaremill.neme" %% "neme-plugin" % "0.0.5"),
     compilerPlugin("com.github.ghik" % "silencer-plugin" % Versions.silencer cross CrossVersion.full),
     "com.github.ghik" % "silencer-lib" % Versions.silencer % Provided cross CrossVersion.full
-  )
+  ),
+  mimaPreviousArtifacts := Set.empty //Set("com.softwaremill.sttp.tapir" %% name.value % "0.12.21")
 )
 
 def dependenciesFor(version: String)(deps: (Option[(Long, Long)] => ModuleID)*): Seq[ModuleID] =
   deps.map(_.apply(CrossVersion.partialVersion(version)))
 
 val scalaTest = "org.scalatest" %% "scalatest" % Versions.scalaTest
+val scalaCheck = "org.scalacheck" %% "scalacheck" % Versions.scalaCheck
 
 lazy val loggerDependencies = Seq(
   "ch.qos.logback" % "logback-classic" % "1.2.3",
@@ -37,27 +40,34 @@ lazy val loggerDependencies = Seq(
 
 lazy val rootProject = (project in file("."))
   .settings(commonSettings)
+  .settings(mimaPreviousArtifacts := Set.empty)
   .settings(publishArtifact := false, name := "tapir")
   .aggregate(
     core,
-    tapirCats,
+    cats,
+    refined,
+    enumeratum,
     circeJson,
     playJson,
     sprayJson,
     uPickleJson,
+    tethysJson,
     openapiModel,
     openapiCirce,
     openapiCirceYaml,
     openapiDocs,
     swaggerUiAkka,
+    redocAkka,
     swaggerUiHttp4s,
-    swaggerUiFinatra,
     redocHttp4s,
+    swaggerUiFinatra,
     serverTests,
     akkaHttpServer,
     http4sServer,
+    sttpStubServer,
     finatraServer,
     finatraServerCats,
+    playServer,
     sttpClient,
     tests,
     examples,
@@ -71,9 +81,11 @@ lazy val core: Project = (project in file("core"))
   .settings(
     name := "tapir-core",
     libraryDependencies ++= Seq(
-      "com.propensive" %% "magnolia" % "0.12.6",
-      "com.softwaremill.sttp.model" %% "core" % "1.0.0-RC7",
-      scalaTest % "test"
+      "com.propensive" %% "magnolia" % "0.14.5",
+      "com.softwaremill.sttp.model" %% "core" % "1.0.3",
+      scalaTest % Test,
+      scalaCheck % Test,
+      "com.47deg" %% "scalacheck-toolbox-datetime" % "0.3.5" % Test
     ),
     unmanagedSourceDirectories in Compile += {
       val sourceDir = (baseDirectory in Compile).value / "src" / "main"
@@ -90,6 +102,7 @@ lazy val tests: Project = (project in file("tests"))
   .settings(
     name := "tapir-tests",
     libraryDependencies ++= Seq(
+      "io.circe" %% "circe-generic" % Versions.circe,
       "com.softwaremill.common" %% "tagging" % "2.2.1",
       scalaTest,
       "com.softwaremill.macwire" %% "macros" % "2.3.3" % "provided"
@@ -98,16 +111,38 @@ lazy val tests: Project = (project in file("tests"))
   )
   .dependsOn(core, circeJson)
 
-// cats
+// integrations
 
-lazy val tapirCats: Project = (project in file("cats"))
+lazy val cats: Project = (project in file("integrations/cats"))
   .settings(commonSettings)
   .settings(
     name := "tapir-cats",
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-core" % "2.1.0",
-      "org.scalacheck" %% "scalacheck" % Versions.scalaCheck % "test",
-      scalaTest % "test"
+      "org.typelevel" %% "cats-core" % "2.1.1",
+      scalaTest % Test,
+      scalaCheck % Test
+    )
+  )
+  .dependsOn(core)
+
+lazy val enumeratum: Project = (project in file("integrations/enumeratum"))
+  .settings(commonSettings)
+  .settings(
+    name := "tapir-enumeratum",
+    libraryDependencies ++= Seq(
+      "com.beachape" %% "enumeratum" % Versions.enumeratum,
+      scalaTest % Test
+    )
+  )
+  .dependsOn(core)
+
+lazy val refined: Project = (project in file("integrations/refined"))
+  .settings(commonSettings)
+  .settings(
+    name := "tapir-refined",
+    libraryDependencies ++= Seq(
+      "eu.timepit" %% "refined" % Versions.refined,
+      scalaTest % Test
     )
   )
   .dependsOn(core)
@@ -120,7 +155,6 @@ lazy val circeJson: Project = (project in file("json/circe"))
     name := "tapir-json-circe",
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core" % Versions.circe,
-      "io.circe" %% "circe-generic" % Versions.circe,
       "io.circe" %% "circe-parser" % Versions.circe
     )
   )
@@ -132,7 +166,7 @@ lazy val playJson: Project = (project in file("json/playjson"))
     name := "tapir-json-play",
     libraryDependencies ++= Seq(
       "com.typesafe.play" %% "play-json" % Versions.playJson,
-      scalaTest % "test"
+      scalaTest % Test
     )
   )
   .dependsOn(core)
@@ -143,7 +177,7 @@ lazy val sprayJson: Project = (project in file("json/sprayjson"))
     name := "tapir-json-spray",
     libraryDependencies ++= Seq(
       "io.spray" %% "spray-json" % Versions.sprayJson,
-      scalaTest % "test"
+      scalaTest % Test
     )
   )
   .dependsOn(core)
@@ -154,7 +188,18 @@ lazy val uPickleJson: Project = (project in file("json/upickle"))
     name := "tapir-json-upickle",
     libraryDependencies ++= Seq(
       "com.lihaoyi" %% "upickle" % Versions.upickle,
-      scalaTest % "test"
+      scalaTest % Test
+    )
+  )
+  .dependsOn(core)
+
+lazy val tethysJson: Project = (project in file("json/tethys"))
+  .settings(commonSettings)
+  .settings(
+    name := "tapir-json-tethys",
+    libraryDependencies ++= Seq(
+      "com.tethys-json" %% "tethys-core" % Versions.tethys,
+      "com.tethys-json" %% "tethys-jackson" % Versions.tethys
     )
   )
   .dependsOn(core)
@@ -166,6 +211,7 @@ lazy val openapiModel: Project = (project in file("openapi/openapi-model"))
   .settings(
     name := "tapir-openapi-model"
   )
+  .settings(libraryDependencies += scalaTest % Test)
 
 lazy val openapiCirce: Project = (project in file("openapi/openapi-circe"))
   .settings(commonSettings)
@@ -194,7 +240,7 @@ lazy val openapiDocs: Project = (project in file("docs/openapi-docs"))
   .settings(
     name := "tapir-openapi-docs"
   )
-  .dependsOn(openapiModel, core, tests % "test", openapiCirceYaml % "test")
+  .dependsOn(openapiModel, core, tests % Test, openapiCirceYaml % Test)
 
 lazy val swaggerUiAkka: Project = (project in file("docs/swagger-ui-akka-http"))
   .settings(commonSettings)
@@ -204,6 +250,16 @@ lazy val swaggerUiAkka: Project = (project in file("docs/swagger-ui-akka-http"))
       "com.typesafe.akka" %% "akka-http" % Versions.akkaHttp,
       "com.typesafe.akka" %% "akka-stream" % Versions.akkaStreams,
       "org.webjars" % "swagger-ui" % Versions.swaggerUi
+    )
+  )
+
+lazy val redocAkka: Project = (project in file("docs/redoc-akka-http"))
+  .settings(commonSettings)
+  .settings(
+    name := "tapir-redoc-akka-http",
+    libraryDependencies ++= Seq(
+      "com.typesafe.akka" %% "akka-http" % Versions.akkaHttp,
+      "com.typesafe.akka" %% "akka-stream" % Versions.akkaStreams
     )
   )
 
@@ -256,7 +312,7 @@ lazy val akkaHttpServer: Project = (project in file("server/akka-http-server"))
       "com.typesafe.akka" %% "akka-stream" % Versions.akkaStreams
     )
   )
-  .dependsOn(core, serverTests % "test")
+  .dependsOn(core, serverTests % Test)
 
 lazy val graphQlServer: Project = (project in file("server/graphql-server"))
   .settings(commonSettings: _*)
@@ -265,9 +321,9 @@ lazy val graphQlServer: Project = (project in file("server/graphql-server"))
     libraryDependencies ++= Seq(
       // .. Try to use caliban.RootResolver and caliban.GraphQL directly in Tapir, seems very possible,
       // all that is needed - caliban.Schema instances for input, queries, mutations, subscriptions
-      "com.github.ghostdogpr" %% "caliban" % "0.3.0",
-      "com.github.ghostdogpr" %% "caliban-http4s" % "0.3.0", // routes for http4s
-      "com.github.ghostdogpr" %% "caliban-cats"   % "0.3.0", // interop with cats effect
+      "com.github.ghostdogpr" %% "caliban" % "0.7.5",
+      "com.github.ghostdogpr" %% "caliban-http4s" % "0.7.5", // routes for http4s
+      "com.github.ghostdogpr" %% "caliban-cats"   % "0.7.5", // interop with cats effect
 
       "dev.zio" %% "zio" % "1.0.0-RC17",
       "dev.zio" %% "zio-interop-cats" % "2.0.0.0-RC10",
@@ -292,7 +348,14 @@ lazy val http4sServer: Project = (project in file("server/http4s-server"))
       "org.http4s" %% "http4s-blaze-server" % Versions.http4s
     )
   )
-  .dependsOn(core, serverTests % "test")
+  .dependsOn(core, serverTests % Test)
+
+lazy val sttpStubServer: Project = (project in file("server/sttp-stub-server"))
+  .settings(commonSettings)
+  .settings(
+    name := "tapir-sttp-stub-server"
+  )
+  .dependsOn(core, serverTests % "test", sttpClient)
 
 lazy val finatraServer: Project = (project in file("server/finatra-server"))
   .settings(commonSettings: _*)
@@ -300,22 +363,22 @@ lazy val finatraServer: Project = (project in file("server/finatra-server"))
     name := "tapir-finatra-server",
     libraryDependencies ++= Seq(
       "com.twitter" %% "finatra-http" % Versions.finatra,
-      "org.apache.httpcomponents" % "httpmime" % "4.5.11",
+      "org.apache.httpcomponents" % "httpmime" % "4.5.12",
       // Testing
-      "com.twitter" %% "finatra-http" % Versions.finatra % "test",
-      "com.twitter" %% "inject-server" % Versions.finatra % "test",
-      "com.twitter" %% "inject-app" % Versions.finatra % "test",
-      "com.twitter" %% "inject-core" % Versions.finatra % "test",
-      "com.twitter" %% "inject-modules" % Versions.finatra % "test",
-      "com.twitter" %% "finatra-http" % Versions.finatra % "test" classifier "tests",
-      "com.twitter" %% "inject-server" % Versions.finatra % "test" classifier "tests",
-      "com.twitter" %% "inject-app" % Versions.finatra % "test" classifier "tests",
-      "com.twitter" %% "inject-core" % Versions.finatra % "test" classifier "tests",
-      "com.twitter" %% "inject-modules" % Versions.finatra % "test" classifier "tests"
+      "com.twitter" %% "finatra-http" % Versions.finatra % Test,
+      "com.twitter" %% "inject-server" % Versions.finatra % Test,
+      "com.twitter" %% "inject-app" % Versions.finatra % Test,
+      "com.twitter" %% "inject-core" % Versions.finatra % Test,
+      "com.twitter" %% "inject-modules" % Versions.finatra % Test,
+      "com.twitter" %% "finatra-http" % Versions.finatra % Test classifier "tests",
+      "com.twitter" %% "inject-server" % Versions.finatra % Test classifier "tests",
+      "com.twitter" %% "inject-app" % Versions.finatra % Test classifier "tests",
+      "com.twitter" %% "inject-core" % Versions.finatra % Test classifier "tests",
+      "com.twitter" %% "inject-modules" % Versions.finatra % Test classifier "tests"
     )
   )
   .settings(only2_12settings)
-  .dependsOn(core, serverTests % "test")
+  .dependsOn(core, serverTests % Test)
 
 lazy val finatraServerCats: Project =
   (project in file("server/finatra-server/finatra-server-cats"))
@@ -329,7 +392,19 @@ lazy val finatraServerCats: Project =
       )
     )
     .settings(only2_12settings)
-    .dependsOn(finatraServer % "compile->compile;test->test", serverTests % "test")
+    .dependsOn(finatraServer % "compile->compile;test->test", serverTests % Test)
+
+lazy val playServer: Project = (project in file("server/play-server"))
+  .settings(commonSettings)
+  .settings(
+    name := "tapir-play-server",
+    libraryDependencies ++= Seq(
+      "com.typesafe.play" %% "play-server" % Versions.playServer,
+      "com.typesafe.play" %% "play-akka-http-server" % Versions.playServer,
+      "com.typesafe.play" %% "play" % Versions.playServer
+    )
+  )
+  .dependsOn(core, serverTests % Test)
 
 // client
 
@@ -351,10 +426,10 @@ lazy val sttpClient: Project = (project in file("client/sttp-client"))
     name := "tapir-sttp-client",
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.client" %% "core" % Versions.sttp,
-      "com.softwaremill.sttp.client" %% "async-http-client-backend-fs2" % Versions.sttp % "test"
+      "com.softwaremill.sttp.client" %% "async-http-client-backend-fs2" % Versions.sttp % Test
     )
   )
-  .dependsOn(core, clientTests % "test")
+  .dependsOn(core, clientTests % Test)
 
 // other
 
@@ -363,8 +438,8 @@ lazy val examples: Project = (project in file("examples"))
   .settings(
     name := "tapir-examples",
     libraryDependencies ++= Seq(
-      "dev.zio" %% "zio" % "1.0.0-RC17",
-      "dev.zio" %% "zio-interop-cats" % "2.0.0.0-RC10",
+      "dev.zio" %% "zio" % Versions.zio,
+      "dev.zio" %% "zio-interop-cats" % Versions.zioInteropCats,
       "org.typelevel" %% "cats-effect" % Versions.catsEffect,
       "org.http4s" %% "http4s-dsl" % Versions.http4s
     ),
@@ -380,11 +455,11 @@ lazy val playground: Project = (project in file("playground"))
     name := "tapir-playground",
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.client" %% "akka-http-backend" % Versions.sttp,
-      "dev.zio" %% "zio" % "1.0.0-RC17",
-      "dev.zio" %% "zio-interop-cats" % "2.0.0.0-RC10",
+      "dev.zio" %% "zio" % Versions.zio,
+      "dev.zio" %% "zio-interop-cats" % Versions.zioInteropCats,
       "org.typelevel" %% "cats-effect" % Versions.catsEffect,
-      "io.swagger" % "swagger-annotations" % "1.6.0",
-      "io.circe" %% "circe-generic-extras" % "0.12.2"
+      "io.swagger" % "swagger-annotations" % "1.6.1",
+      "io.circe" %% "circe-generic-extras" % "0.13.0"
     ),
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.client" %% "akka-http-backend" % Versions.sttp

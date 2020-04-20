@@ -23,11 +23,21 @@ sealed trait Validator[T] {
 object Validator extends ValidatorMagnoliaDerivation with ValidatorEnumMacro {
   type EncodeToRaw[T] = T => Option[scala.Any]
 
+  private val _pass: Validator[Nothing] = all()
+  private val _reject: Validator[Nothing] = any()
+
   def all[T](v: Validator[T]*): Validator[T] = if (v.size == 1) v.head else All[T](v.toList)
   def any[T](v: Validator[T]*): Validator[T] = if (v.size == 1) v.head else Any[T](v.toList)
 
-  def pass[T]: Validator[T] = all()
-  def reject[T]: Validator[T] = any()
+  /**
+    * A validator instance that always pass.
+    */
+  def pass[T]: Validator[T] = _pass.asInstanceOf[Validator[T]]
+
+  /**
+    * A validator instance that always reject.
+    */
+  def reject[T]: Validator[T] = _reject.asInstanceOf[Validator[T]]
 
   def min[T: Numeric](value: T, exclusive: Boolean = false): Validator.Primitive[T] = Min(value, exclusive)
   def max[T: Numeric](value: T, exclusive: Boolean = false): Validator.Primitive[T] = Max(value, exclusive)
@@ -165,9 +175,7 @@ object Validator extends ValidatorMagnoliaDerivation with ValidatorEnumMacro {
   }
   case class Product[T](fields: Map[String, ProductField[T]]) extends Single[T] {
     override def validate(t: T): List[ValidationError[_]] = {
-      fields.values.flatMap { f =>
-        f.validator.validate(f.get(t)).map(_.prependPath(f.name))
-      }
+      fields.values.flatMap { f => f.validator.validate(f.get(t)).map(_.prependPath(f.name)) }
     }.toList
   }
 

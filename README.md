@@ -10,11 +10,11 @@ interpreted as:
 
 * a server, given the "business logic": a function, which computes output parameters based on input parameters. 
   Currently supported: 
-  * [Akka HTTP](https://tapir-scala.readthedocs.io/en/latest/server/akkahttp.html) `Route`s/`Directive`s.
-  * [Http4s](https://tapir-scala.readthedocs.io/en/latest/server/http4s.html) `HttpRoutes[F]`
-  * [Finatra](https://tapir-scala.readthedocs.io/en/latest/server/finatra.html) `FinatraRoute`
-* a client, which is a function from input parameters to output parameters. Currently supported: [sttp](https://tapir-scala.readthedocs.io/en/latest/sttp.html).
-* documentation. Currently supported: [OpenAPI](https://tapir-scala.readthedocs.io/en/latest/openapi.html).
+  * [Akka HTTP](https://tapir.softwaremill.com/en/latest/server/akkahttp.html) `Route`s/`Directive`s.
+  * [Http4s](https://tapir.softwaremill.com/en/latest/server/http4s.html) `HttpRoutes[F]`
+  * [Finatra](https://tapir.softwaremill.com/en/latest/server/finatra.html) `FinatraRoute`
+* a client, which is a function from input parameters to output parameters. Currently supported: [sttp](https://tapir.softwaremill.com/en/latest/sttp.html).
+* documentation. Currently supported: [OpenAPI](https://tapir.softwaremill.com/en/latest/openapi.html).
 
 ## Teaser
 
@@ -68,14 +68,14 @@ val booksListingRequest: Request[Either[String, List[Book]], Nothing] = booksLis
 
 ## Documentation
 
-tapir documentation is available at [tapir-scala.readthedocs.io](http://tapir-scala.readthedocs.io).
+tapir documentation is available at [tapir.softwaremill.com](http://tapir.softwaremill.com).
 
 ## Quickstart with sbt
 
 Add the following dependency:
 
 ```scala
-"com.softwaremill.sttp.tapir" %% "tapir-core" % "0.12.19"
+"com.softwaremill.sttp.tapir" %% "tapir-core" % "0.13.2"
 ```
 
 You'll need partial unification enabled in the compiler (alternatively, you'll need to manually provide type arguments in some cases):

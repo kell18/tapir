@@ -26,7 +26,7 @@ class CalibalExample extends App with GenericSchema[Console with Clock] {
       listBooks: Limit => URIO[Console, Seq[Book]]
   )
 
-  implicit val queriesSchema = gen[Queries]
+  /*implicit val queriesSchema = gen[Queries]
 
   val lib = new Library
 
@@ -37,6 +37,6 @@ class CalibalExample extends App with GenericSchema[Console with Clock] {
 
   println("----- Schema START -----")
   println(gql.render)
-  println("----- Schema END -----")
+  println("----- Schema END -----")*/
 
 }

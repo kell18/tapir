@@ -4,7 +4,7 @@ import sangria.ast
 import sangria.marshalling.{FromInput, MarshallerCapability}
 import sangria.schema.{Schema => SangriaSchema, _}
 import sangria.validation.{BigIntCoercionViolation, IntCoercionViolation}
-import sttp.tapir.{Codec, CodecForMany, CodecFormat, CodecMeta, Endpoint, EndpointInfo, EndpointInput, EndpointIO, Schema}
+import sttp.tapir.{Codec, CodecFormat, Endpoint, EndpointInfo, EndpointInput, EndpointIO, Schema}
 import sttp.tapir.SchemaType.{SInteger, SObjectInfo, SProduct, SString}
 import scala.reflect.ClassTag
 
@@ -28,11 +28,11 @@ object EndpointToSangria {
     // TODO Account codecs validators
     def inputToArgs(input: EndpointInput[_]): List[Argument[_]] = {
       input match {
-        case p @ EndpointInput.PathCapture(codec, nameOpt, info) =>
+        case p @ EndpointInput.PathCapture(nameOpt, codec, info) =>
           val name = nameOpt.getOrElse(sys.error("name is required for PathCapture for Sangria generation"))
           Argument(
             name = name,
-            argumentType = schemaToSInputType(codec.meta.schema, name),
+            argumentType = schemaToSInputType(codec.schema.get, name),
             description = info.description,
             defaultValue = None,
             fromInput = FromInput.defaultInput[Any],
@@ -42,7 +42,7 @@ object EndpointToSangria {
         case q @ EndpointInput.Query(name, codec, info) =>
           Argument(
             name = name,
-            argumentType = schemaToSInputType(codec.meta.schema, name),
+            argumentType = schemaToSInputType(codec.schema.get, name),
             description = info.description,
             defaultValue = None,
             fromInput = FromInput.defaultInput[Any],
@@ -52,7 +52,7 @@ object EndpointToSangria {
         case EndpointInput.Cookie(name, codec, info) =>
           Argument(
             name = name,
-            argumentType = schemaToSInputType(codec.meta.schema, name),
+            argumentType = schemaToSInputType(codec.schema.get, name),
             description = info.description,
             defaultValue = None,
             fromInput = FromInput.defaultInput[Any],
@@ -60,7 +60,7 @@ object EndpointToSangria {
             astNodes = Vector.empty
           ) :: Nil
         case a: EndpointInput.Auth[I] => inputToArgs(a.input)
-        case EndpointInput.Multiple(inputs) =>
+        case EndpointInput.Multiple(inputs, _, _) =>
           inputs.flatMap(x => inputToArgs(x.asInstanceOf[EndpointInput[_]])).toList
 
         case _ => List.empty // TODO Mapped?, ExtractFromRequest?, QueryParams, PathsCapture, EndpointIO
